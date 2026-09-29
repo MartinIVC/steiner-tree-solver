@@ -1,0 +1,14 @@
+*.pdf
+
+*.o
+*.out
+steiner_solver
+build/
+bin/
+
+.vscode/
+.idea/
+.DS_Store
+
+__pucacje__/
+*.pyc
