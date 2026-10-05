@@ -3,11 +3,13 @@
 #include <queue>
 #include <iostream>
 
-// Estructura Disjoint Set Union (DSU) para el algoritmo de Kruskal
+// Estructura Disjoint Set Union (DSU) con compresión de caminos y unión por rango
 struct DSU {
     std::vector<int> parent;
+    std::vector<int> rank;
     DSU(int n) {
         parent.resize(n + 1);
+        rank.assign(n + 1, 0);
         for (int i = 0; i <= n; i++) parent[i] = i;
     }
     int find(int i) {
@@ -18,7 +20,14 @@ struct DSU {
         int root_i = find(i);
         int root_j = find(j);
         if (root_i != root_j) {
-            parent[root_i] = root_j;
+            if (rank[root_i] < rank[root_j]) {
+                parent[root_i] = root_j;
+            } else if (rank[root_i] > rank[root_j]) {
+                parent[root_j] = root_i;
+            } else {
+                parent[root_j] = root_i;
+                rank[root_i]++;
+            }
             return true;
         }
         return false;
