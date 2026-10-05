@@ -36,6 +36,7 @@ int main(int argc, char* argv[]) {
     double mst_time = std::chrono::duration<double, std::milli>(t_end - t_start).count();
     int mst_cost = Validator::compute_cost(mst_edges);
     Validator::is_valid_steiner_tree(g, mst_edges, true);
+    Validator::export_to_csv("results/mst_base.csv", mst_edges);
     std::cout << "Tiempo MST: " << mst_time << " ms\n\n";
 
     // 3. Fase 2: Poda de Hojas Steiner
@@ -46,6 +47,10 @@ int main(int argc, char* argv[]) {
     double prune_time = std::chrono::duration<double, std::milli>(t_end - t_start).count();
     int pruned_cost = Validator::compute_cost(pruned_edges);
     Validator::is_valid_steiner_tree(g, pruned_edges, true);
+    if (!Validator::has_steiner_leaves(g, pruned_edges)) {
+        std::cout << "[Validador] Verificación post-poda: No quedan hojas Steiner en el árbol.\n";
+    }
+    Validator::export_to_csv("results/mst_pruned.csv", pruned_edges);
     std::cout << "Tiempo Poda: " << prune_time << " ms\n\n";
 
     // 4. Fase 3: Optimización Avanzada
@@ -56,6 +61,7 @@ int main(int argc, char* argv[]) {
     double opt_time = std::chrono::duration<double, std::milli>(t_end - t_start).count();
     int opt_cost = Validator::compute_cost(opt_edges);
     Validator::is_valid_steiner_tree(g, opt_edges, true);
+    Validator::export_to_csv("results/optimizer_solution.csv", opt_edges);
     std::cout << "Tiempo Optimización: " << opt_time << " ms\n\n";
 
     // 5. Tabla Resumen de Resultados
