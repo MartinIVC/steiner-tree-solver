@@ -53,6 +53,70 @@ std::vector<Edge> MSTSolver::compute_mst(const Graph& g) {
     return mst_edges;
 }
 
+// Estructura auxiliar para la cola de prioridad de Prim
+struct PrimElement {
+    int weight;
+    int target_priority; // 1 si el destino es terminal (cuando prefer_terminals es true), 0 en caso contrario
+    int u;
+    int v;
+
+    bool operator>(const PrimElement& other) const {
+        if (weight != other.weight) {
+            return weight > other.weight; // Min-heap por peso
+        }
+        if (target_priority != other.target_priority) {
+            return target_priority < other.target_priority; // Mayor prioridad primero
+        }
+        if (u != other.u) return u > other.u;
+        return v > other.v;
+    }
+};
+
+std::vector<Edge> MSTSolver::compute_mst_prim(const Graph& g, int start_node, bool prefer_terminals) {
+    if (g.num_nodes <= 1) return {};
+
+    int root = start_node;
+    if (root <= 0 || root > g.num_nodes) {
+        root = g.terminals.empty() ? 1 : g.terminals.front();
+    }
+
+    std::vector<bool> visited(g.num_nodes + 1, false);
+    std::priority_queue<PrimElement, std::vector<PrimElement>, std::greater<PrimElement>> pq;
+
+    visited[root] = true;
+    for (const auto& neighbor : g.adj[root]) {
+        int priority = (prefer_terminals && g.is_terminal[neighbor.to]) ? 1 : 0;
+        pq.push({neighbor.weight, priority, root, neighbor.to});
+    }
+
+    std::vector<Edge> mst_edges;
+    mst_edges.reserve(g.num_nodes - 1);
+
+    while (!pq.empty() && (int)mst_edges.size() < g.num_nodes - 1) {
+        auto top = pq.top();
+        pq.pop();
+
+        int u = top.u;
+        int v = top.v;
+        int w = top.weight;
+
+        if (visited[v]) continue;
+        visited[v] = true;
+
+        mst_edges.push_back({u, v, w});
+
+        for (const auto& neighbor : g.adj[v]) {
+            int nxt = neighbor.to;
+            if (!visited[nxt]) {
+                int priority = (prefer_terminals && g.is_terminal[nxt]) ? 1 : 0;
+                pq.push({neighbor.weight, priority, v, nxt});
+            }
+        }
+    }
+
+    return mst_edges;
+}
+
 std::vector<Edge> MSTSolver::prune_steiner_leaves(const Graph& g, const std::vector<Edge>& tree_edges) {
     // 1. Construir grados y adyacencias del árbol
     std::vector<std::vector<std::pair<int, int>>> tree_adj(g.num_nodes + 1);

@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -O3 -Wall -std=c++17
+CXXFLAGS = -O3 -Wall -Wextra -std=c++17
 
 SRCS = src/main.cpp src/graph.cpp src/validator.cpp src/mst.cpp src/optimizer.cpp
 OBJS = $(SRCS:.cpp=.o)
