@@ -328,3 +328,49 @@ int Graph::get_shortest_distance(int start_node, int target_node) const {
     }
     return dist[target_node];
 }
+
+TerminalMetricClosure Graph::compute_terminal_metric_closure() const {
+    TerminalMetricClosure closure;
+    closure.dist.resize(num_terminals);
+    closure.parent.resize(num_terminals);
+    closure.terminal_index_map.assign(num_nodes + 1, -1);
+
+    for (int i = 0; i < num_terminals; ++i) {
+        closure.terminal_index_map[terminals[i]] = i;
+    }
+
+    for (int i = 0; i < num_terminals; ++i) {
+        int t = terminals[i];
+        closure.dist[i].assign(num_nodes + 1, INF);
+        closure.parent[i].assign(num_nodes + 1, -1);
+        dijkstra(t, closure.dist[i], closure.parent[i]);
+    }
+
+    return closure;
+}
+
+std::vector<Edge> Graph::get_terminal_metric_edges(const TerminalMetricClosure& closure) const {
+    std::vector<Edge> metric_edges;
+    metric_edges.reserve((num_terminals * (num_terminals - 1)) / 2);
+
+    for (int i = 0; i < num_terminals; ++i) {
+        int u = terminals[i];
+        for (int j = i + 1; j < num_terminals; ++j) {
+            int v = terminals[j];
+            int w = closure.dist[i][v];
+            if (w < INF) {
+                metric_edges.push_back({u, v, w});
+            }
+        }
+    }
+    return metric_edges;
+}
+
+std::vector<Edge> Graph::get_metric_path_edges(int terminal_u, int node_v, const TerminalMetricClosure& closure) const {
+    if (!is_valid_node(terminal_u) || !is_valid_node(node_v)) return {};
+    if (terminal_u < 1 || terminal_u >= (int)closure.terminal_index_map.size()) return {};
+    int idx = closure.terminal_index_map[terminal_u];
+    if (idx < 0 || idx >= (int)closure.parent.size()) return {};
+    return get_shortest_path_edges(terminal_u, node_v, closure.parent[idx]);
+}
+

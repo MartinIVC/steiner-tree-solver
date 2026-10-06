@@ -26,6 +26,20 @@ struct Neighbor {
     int weight;     // Peso de la arista
 };
 
+// Estructura que almacena la clausura métrica completa de los terminales
+struct TerminalMetricClosure {
+    // Matriz de distancias mínimas: dist[t_i][node]
+    // indexada por índice de terminal (0 a num_terminals - 1)
+    std::vector<std::vector<int>> dist;
+
+    // Matriz de predecesores: parent[t_i][node]
+    // para reconstruir caminos hacia cualquier nodo desde el terminal t_i
+    std::vector<std::vector<int>> parent;
+
+    // Mapeo rápido: id de nodo -> índice en vector terminals (-1 si no es terminal)
+    std::vector<int> terminal_index_map;
+};
+
 class Graph {
 public:
     static constexpr int INF = GRAPH_INF;
@@ -109,4 +123,14 @@ public:
 
     // Retorna la distancia mínima directa entre dos nodos ejecutando Dijkstra puntual (INF si inalcanzable)
     int get_shortest_distance(int start_node, int target_node) const;
+
+    // Calcula las distancias mínimas y predecesores desde TODOS los terminales (417 Dijkstras)
+    // Complejidad temporal: O(|T| * (|E| + |V| log |V|)) (~300 - 500 ms en e18)
+    TerminalMetricClosure compute_terminal_metric_closure() const;
+
+    // Genera la lista completa de aristas métricas entre todos los pares de terminales (|T| * (|T|-1) / 2)
+    std::vector<Edge> get_terminal_metric_edges(const TerminalMetricClosure& closure) const;
+
+    // Reconstruye el camino en aristas del grafo original entre dos terminales (o terminal y nodo) usando la clausura métrica
+    std::vector<Edge> get_metric_path_edges(int terminal_u, int node_v, const TerminalMetricClosure& closure) const;
 };

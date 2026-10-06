@@ -3,54 +3,35 @@
 #include <queue>
 #include <iostream>
 
-// Estructura Disjoint Set Union (DSU) con compresión de caminos y unión por rango
-struct DSU {
-    std::vector<int> parent;
-    std::vector<int> rank;
-    DSU(int n) {
-        parent.resize(n + 1);
-        rank.assign(n + 1, 0);
-        for (int i = 0; i <= n; i++) parent[i] = i;
-    }
-    int find(int i) {
-        if (parent[i] == i) return i;
-        return parent[i] = find(parent[i]);
-    }
-    bool unite(int i, int j) {
-        int root_i = find(i);
-        int root_j = find(j);
-        if (root_i != root_j) {
-            if (rank[root_i] < rank[root_j]) {
-                parent[root_i] = root_j;
-            } else if (rank[root_i] > rank[root_j]) {
-                parent[root_j] = root_i;
-            } else {
-                parent[root_j] = root_i;
-                rank[root_i]++;
-            }
-            return true;
-        }
-        return false;
-    }
-};
-
 std::vector<Edge> MSTSolver::compute_mst(const Graph& g) {
-    std::vector<Edge> sorted_edges = g.edge_list;
+    return compute_mst(g.edge_list, g.num_nodes);
+}
+
+std::vector<Edge> MSTSolver::compute_mst(const std::vector<Edge>& edges, int num_nodes) {
+    if (edges.empty() || num_nodes <= 1) return {};
+
+    std::vector<Edge> sorted_edges = edges;
     std::sort(sorted_edges.begin(), sorted_edges.end());
 
-    DSU dsu(g.num_nodes);
+    DSU dsu(num_nodes);
     std::vector<Edge> mst_edges;
-    mst_edges.reserve(g.num_nodes - 1);
+    mst_edges.reserve(num_nodes - 1);
 
     for (const auto& e : sorted_edges) {
         if (dsu.unite(e.u, e.v)) {
             mst_edges.push_back(e);
-            if ((int)mst_edges.size() == g.num_nodes - 1) {
-                break;
-            }
         }
     }
     return mst_edges;
+}
+
+std::vector<Edge> MSTSolver::compute_mst(const std::vector<Edge>& edges) {
+    int max_node = 0;
+    for (const auto& e : edges) {
+        if (e.u > max_node) max_node = e.u;
+        if (e.v > max_node) max_node = e.v;
+    }
+    return compute_mst(edges, max_node);
 }
 
 // Estructura auxiliar para la cola de prioridad de Prim

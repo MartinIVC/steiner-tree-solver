@@ -9,8 +9,43 @@
 
 int main(int argc, char* argv[]) {
     std::string dataset_path = "data/e18.stp";
-    if (argc > 1) {
-        dataset_path = argv[1];
+    OptimizerConfig opt_config;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            std::cout << "Uso: " << argv[0] << " [ruta_archivo.stp] [opciones]\n"
+                      << "Opciones:\n"
+                      << "  --iter <N>          Número máximo de iteraciones para la búsqueda local (default: 1000)\n"
+                      << "  --time-limit <ms>   Tiempo límite en milisegundos para optimización (default: 60000)\n"
+                      << "  --quiet             Desactivar mensajes informativos del optimizador\n"
+                      << "  --verbose           Activar mensajes informativos del optimizador (default)\n"
+                      << "  --help, -h          Muestra este mensaje de ayuda\n";
+            return 0;
+        } else if (arg == "--iter") {
+            if (i + 1 < argc) {
+                opt_config.max_iterations = std::stoi(argv[++i]);
+            } else {
+                std::cerr << "Error: --iter requiere un valor numérico.\n";
+                return 1;
+            }
+        } else if (arg == "--time-limit") {
+            if (i + 1 < argc) {
+                opt_config.max_time_ms = std::stoi(argv[++i]);
+            } else {
+                std::cerr << "Error: --time-limit requiere un valor numérico en ms.\n";
+                return 1;
+            }
+        } else if (arg == "--quiet") {
+            opt_config.verbose = false;
+        } else if (arg == "--verbose") {
+            opt_config.verbose = true;
+        } else if (arg.rfind("--", 0) == 0) {
+            std::cerr << "Opción desconocida: " << arg << ". Use --help para más información.\n";
+            return 1;
+        } else {
+            dataset_path = arg;
+        }
     }
 
     std::cout << "====================================================\n";
@@ -99,7 +134,7 @@ int main(int argc, char* argv[]) {
     // 4. Fase 3: Optimización Avanzada
     std::cout << ">>> Fase 3: Ejecutando Algoritmo de Optimización...\n";
     t_start = std::chrono::high_resolution_clock::now();
-    auto opt_edges = Optimizer::optimize(g);
+    auto opt_edges = Optimizer::optimize(g, opt_config);
     t_end = std::chrono::high_resolution_clock::now();
     double opt_time = std::chrono::duration<double, std::milli>(t_end - t_start).count();
     int opt_cost = Validator::compute_cost(opt_edges);

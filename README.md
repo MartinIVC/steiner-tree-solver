@@ -68,9 +68,10 @@ Para garantizar una integración fluida entre los módulos, se definieron estas 
 ia-steiner-tree/
 ├── data/                       # Instancia oficial e18.stp (SteinLib)
 ├── src/                        # Código fuente en C++
-│   ├── graph.hpp / .cpp        # Parser de .stp y estructura del grafo (base 1)
+│   ├── graph.hpp / .cpp        # Parser de .stp, estructura del grafo y clausura métrica
+│   ├── dsu.hpp                 # Estructura Disjoint Set Union (DSU) con unión por rango
 │   ├── validator.hpp / .cpp    # Validador formal (BFS, aciclicidad) y exportador CSV
-│   ├── mst.hpp / .cpp          # MST Base (Kruskal) y algoritmo de poda de hojas
+│   ├── mst.hpp / .cpp          # MST Base (Kruskal, Prim) y algoritmo de poda de hojas
 │   ├── optimizer.hpp / .cpp    # Heurística constructiva (Dijkstra) y búsqueda local
 │   └── main.cpp                # Pipeline principal y cálculo de métricas oficiales
 ├── results/                    # CSVs exportados de las soluciones generadas
@@ -93,8 +94,11 @@ ia-steiner-tree/
 # Compilar todo el proyecto con máxima optimización (-O3)
 make
 
-# Ejecutar el solver
+# Ejecutar el solver (por defecto: data/e18.stp)
 ./steiner_solver
+
+# Ejecutar con parámetros personalizados para el optimizador
+./steiner_solver data/e18.stp --iter 1500 --time-limit 45000
 
 # Limpiar binarios
 make clean

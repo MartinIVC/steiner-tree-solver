@@ -1,6 +1,7 @@
 #pragma once
 
 #include "graph.hpp"
+#include "dsu.hpp"
 #include <vector>
 
 class MSTSolver {
@@ -8,6 +9,12 @@ public:
     // Calcula el Árbol Generador Mínimo (MST) del grafo completo mediante Kruskal
     // Solución base inicial para todo el grafo (costo 2515 para e18 - 4 pts en rúbrica)
     static std::vector<Edge> compute_mst(const Graph& g);
+
+    // Calcula el MST sobre una lista arbitraria de aristas indicando el identificador máximo de nodo
+    static std::vector<Edge> compute_mst(const std::vector<Edge>& edges, int num_nodes);
+
+    // Calcula el MST sobre una lista arbitraria de aristas (deduce automáticamente el nodo máximo)
+    static std::vector<Edge> compute_mst(const std::vector<Edge>& edges);
 
     // NUEVO: Calcula el Árbol Generador Mínimo mediante el algoritmo de Prim.
     // - start_node: Vértice inicial (si es -1, se utiliza el primer terminal: g.terminals.front()).

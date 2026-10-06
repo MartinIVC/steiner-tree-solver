@@ -3,6 +3,13 @@
 #include "graph.hpp"
 #include <vector>
 
+// Configuración para el módulo de optimización y búsqueda local
+struct OptimizerConfig {
+    int max_iterations = 1000;
+    int max_time_ms = 60000;      // 1 minuto por defecto
+    bool verbose = true;
+};
+
 class Optimizer {
 public:
     // Heurística constructiva basada en caminos mínimos (Dijkstra) entre terminales
@@ -12,5 +19,6 @@ public:
     static std::vector<Edge> local_search(const Graph& g, const std::vector<Edge>& initial_solution, int max_iterations = 1000);
 
     // Método principal de optimización para competir por el óptimo (objetivo costo <= 580)
-    static std::vector<Edge> optimize(const Graph& g);
+    static std::vector<Edge> optimize(const Graph& g, const OptimizerConfig& config = OptimizerConfig());
 };
+

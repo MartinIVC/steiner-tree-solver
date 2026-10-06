@@ -22,9 +22,11 @@ std::vector<Edge> Optimizer::local_search(const Graph& g, const std::vector<Edge
     return initial_solution;
 }
 
-std::vector<Edge> Optimizer::optimize(const Graph& g) {
-    std::cout << "[Optimizer] Iniciando algoritmo de optimización...\n";
+std::vector<Edge> Optimizer::optimize(const Graph& g, const OptimizerConfig& config) {
+    if (config.verbose) {
+        std::cout << "[Optimizer] Iniciando algoritmo de optimización...\n";
+    }
     auto initial_sol = constructive_heuristic(g);
-    auto final_sol = local_search(g, initial_sol, 1000);
+    auto final_sol = local_search(g, initial_sol, config.max_iterations);
     return final_sol;
 }
