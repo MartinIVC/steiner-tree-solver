@@ -624,6 +624,7 @@ std::vector<Edge> Optimizer::local_search(const Graph& g, const std::vector<Edge
     std::vector<Edge> pool = initial_solution;
 
     // Cargar solución récord previa si existe
+    std::vector<Edge> prev_tree;
     std::ifstream prev_csv("results/optimizer_solution.csv");
     if (prev_csv.is_open()) {
         std::string line;
@@ -635,9 +636,11 @@ std::vector<Edge> Optimizer::local_search(const Graph& g, const std::vector<Edge
             std::getline(ss, sv, ',');
             std::getline(ss, sw, ',');
             if (!su.empty() && !sv.empty() && !sw.empty()) {
-                pool.push_back({std::min(std::stoi(su), std::stoi(sv)),
-                                std::max(std::stoi(su), std::stoi(sv)),
-                                std::stoi(sw)});
+                Edge e = {std::min(std::stoi(su), std::stoi(sv)),
+                          std::max(std::stoi(su), std::stoi(sv)),
+                          std::stoi(sw)};
+                pool.push_back(e);
+                prev_tree.push_back(e);
             }
         }
         prev_csv.close();
@@ -669,24 +672,17 @@ std::vector<Edge> Optimizer::local_search(const Graph& g, const std::vector<Edge
     auto best_tree = current_tree;
     int best_cost = current_cost;
 
-    int existing_record = Graph::INF;
-    {
-        std::ifstream check_csv("results/optimizer_solution.csv");
-        if (check_csv.is_open()) {
-            std::string line;
-            std::getline(check_csv, line);
-            int sum_w = 0;
-            while (std::getline(check_csv, line)) {
-                std::stringstream ss(line);
-                std::string su, sv, sw;
-                std::getline(ss, su, ',');
-                std::getline(ss, sv, ',');
-                std::getline(ss, sw, ',');
-                if (!sw.empty()) sum_w += std::stoi(sw);
-            }
-            if (sum_w > 0) existing_record = sum_w;
+    if (Validator::is_valid_steiner_tree(g, prev_tree, false)) {
+        int prev_cost = Validator::compute_cost(prev_tree);
+        if (prev_cost < best_cost) {
+            best_cost = prev_cost;
+            best_tree = prev_tree;
+            current_cost = prev_cost;
+            current_tree = prev_tree;
         }
     }
+
+    int existing_record = best_cost;
 
     std::mt19937 rng(777);
 
