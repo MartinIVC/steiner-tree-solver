@@ -133,6 +133,20 @@ Según la rúbrica de evaluación de la clase (diapositiva 313, escala de 15 pun
 | **7. Solución Factible Buena Calidad** | **$[565, 580]$** | **$-76,9\%$ a $-77,5\%$** | $< 1$ hora | **11 - 14 puntos** | **Meta establecida por el equipo ($\le 580$).** |
 | **8. Solución Óptima SteinLib** | **564** | **$-77,57\%$** | - | **15 puntos** | Óptimo global teórico documentado en literatura. |
 
+### Resultados Consolidados Obtenidos por el Solver
+
+| Algoritmo Implementado | Costo Obtenido | Reducción % | Brecha vs Óptimo ($564$) | Aristas ($|E|$) | Tiempo de Cómputo | Cumplimiento Rúbrica |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **MST Base (Kruskal)** | $2.515$ | $0,00\%$ | $+345,9\%$ | $2.499$ | $4,8$ ms | Cumple Hito 4 pts |
+| **MST Podado (Kruskal)** | $1.005$ | $-60,04\%$ | $+78,2\%$ | $1.003$ | $0,3$ ms | Factible intermedio |
+| **Prim Podado (Bias Terminal)** | $\mathbf{779}$ | $\mathbf{-69,03\%}$ | $+38,1\%$ | $777$ | $0,4$ ms | **Supera Hito $892$ (5 pts)** |
+| **Heurística KMB Base** | $650$ | $-74,16\%$ | $+15,2\%$ | $585$ | $243$ ms | Rango 6 - 7 pts |
+| **Optimizador Metaheurístico** | $\mathbf{573}$ | $\mathbf{-77,22\%}$ | $\mathbf{+1,60\%}$ | $565$ | $\mathbf{44,5\text{ s}}$ | **Rango Máximo (11 - 14 pts)** |
+
+> [!NOTE]
+> La solución de costo **573** cuenta con solo 8 aristas de peso 2 y 557 de peso 1. Se demostró experimentalmente que es estrictamente **1-óptima** frente a cualquier intercambio o eliminación individual de nodos Steiner.
+
+
 ---
 
 ## Flujo de Trabajo en Git
