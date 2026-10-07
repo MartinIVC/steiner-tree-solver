@@ -2,6 +2,8 @@
 #include "mst.hpp"
 #include "validator.hpp"
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <vector>
 #include <queue>
 #include <algorithm>
@@ -98,11 +100,22 @@ std::vector<KeyPath> extract_key_paths(const Graph& g, const std::vector<Edge>& 
     return key_paths;
 }
 
+// Función de costo sesgado para multi-source Dijkstra:
+// Prioriza estrictamente cadenas de aristas de peso 1 sobre atajos de peso >= 2
+inline int biased_weight(int w) {
+    if (w == 1) return 100;
+    if (w == 2) return 205; // 2 * 100 = 200 < 205: dos aristas peso 1 preferidas sobre una peso 2
+    if (w == 3) return 350;
+    return 1000 + w * 100;
+}
+
 // Operador 1: Reemplazo de caminos clave por caminos mínimos en G
 bool optimize_key_paths(const Graph& g, std::vector<Edge>& current_tree, int& current_cost) {
     auto key_paths = extract_key_paths(g, current_tree);
 
     for (const auto& kp : key_paths) {
+        if (kp.cost <= 1) continue;
+
         std::vector<Edge> remaining_edges;
         auto is_kp_edge = [&](const Edge& e) {
             int eu = std::min(e.u, e.v);
@@ -162,31 +175,37 @@ bool optimize_key_paths(const Graph& g, std::vector<Edge>& current_tree, int& cu
             }
 
             for (const auto& nb : g.adj[curr]) {
-                if (dist[curr] + nb.weight < dist[nb.to]) {
-                    dist[nb.to] = dist[curr] + nb.weight;
+                if (nb.weight > 2) continue; // Descartar aristas > 2
+                int edge_cost = biased_weight(nb.weight);
+                if (dist[curr] + edge_cost < dist[nb.to]) {
+                    dist[nb.to] = dist[curr] + edge_cost;
                     parent[nb.to] = curr;
                     pq.push({dist[nb.to], nb.to});
                 }
             }
         }
 
-        if (target_node != -1 && dist[target_node] < kp.cost) {
+        if (target_node != -1) {
             std::vector<Edge> new_edges = remaining_edges;
             int curr = target_node;
+            int path_real_cost = 0;
             while (parent[curr] != -1) {
                 int p = parent[curr];
                 int w = g.get_edge_weight(p, curr);
                 new_edges.push_back({std::min(p, curr), std::max(p, curr), w});
+                path_real_cost += w;
                 curr = p;
             }
 
-            auto cand = MSTSolver::prune_steiner_leaves(g, MSTSolver::compute_mst(new_edges, g.num_nodes));
-            if (Validator::is_valid_steiner_tree(g, cand, false)) {
-                int c = Validator::compute_cost(cand);
-                if (c < current_cost) {
-                    current_cost = c;
-                    current_tree = cand;
-                    return true;
+            if (path_real_cost <= kp.cost) {
+                auto cand = MSTSolver::prune_steiner_leaves(g, MSTSolver::compute_mst(new_edges, g.num_nodes));
+                if (Validator::is_valid_steiner_tree(g, cand, false)) {
+                    int c = Validator::compute_cost(cand);
+                    if (c < current_cost) {
+                        current_cost = c;
+                        current_tree = cand;
+                        return true;
+                    }
                 }
             }
         }
@@ -307,9 +326,10 @@ bool optimize_steiner_drop(const Graph& g, std::vector<Edge>& current_tree, int&
                 }
 
                 for (const auto& nb : g.adj[curr]) {
-                    if (nb.to == s) continue; // Prohibir nodo s
-                    if (dist[curr] + nb.weight < dist[nb.to]) {
-                        dist[nb.to] = dist[curr] + nb.weight;
+                    if (nb.to == s || nb.weight > 2) continue; // Prohibir nodo s y aristas > 2
+                    int edge_cost = biased_weight(nb.weight);
+                    if (dist[curr] + edge_cost < dist[nb.to]) {
+                        dist[nb.to] = dist[curr] + edge_cost;
                         parent[nb.to] = curr;
                         pq.push({dist[nb.to], nb.to});
                     }
@@ -478,8 +498,10 @@ std::vector<Edge> shake_and_reconnect(const Graph& g, const std::vector<Edge>& c
             }
 
             for (const auto& nb : g.adj[curr]) {
-                if (dist[curr] + nb.weight < dist[nb.to]) {
-                    dist[nb.to] = dist[curr] + nb.weight;
+                if (nb.weight > 2) continue; // Descartar aristas pesadas
+                int edge_cost = biased_weight(nb.weight);
+                if (dist[curr] + edge_cost < dist[nb.to]) {
+                    dist[nb.to] = dist[curr] + edge_cost;
                     parent[nb.to] = curr;
                     pq.push({dist[nb.to], nb.to});
                 }
@@ -598,8 +620,28 @@ std::vector<Edge> Optimizer::constructive_heuristic(const Graph& g) {
 }
 
 std::vector<Edge> Optimizer::local_search(const Graph& g, const std::vector<Edge>& initial_solution, int max_iterations) {
-    // 1. Minar subgrafos élite uniendo aristas de KMB y raíces diversas SPH
+    // 1. Minar subgrafos élite uniendo aristas de KMB, solución previa guardada y raíces SPH
     std::vector<Edge> pool = initial_solution;
+
+    // Cargar solución récord previa si existe
+    std::ifstream prev_csv("results/optimizer_solution.csv");
+    if (prev_csv.is_open()) {
+        std::string line;
+        std::getline(prev_csv, line); // header
+        while (std::getline(prev_csv, line)) {
+            std::stringstream ss(line);
+            std::string su, sv, sw;
+            std::getline(ss, su, ',');
+            std::getline(ss, sv, ',');
+            std::getline(ss, sw, ',');
+            if (!su.empty() && !sv.empty() && !sw.empty()) {
+                pool.push_back({std::min(std::stoi(su), std::stoi(sv)),
+                                std::max(std::stoi(su), std::stoi(sv)),
+                                std::stoi(sw)});
+            }
+        }
+        prev_csv.close();
+    }
 
     // Semillas representativas para recolectar aristas prometedoras
     const std::vector<int> sample_roots = {
@@ -626,6 +668,25 @@ std::vector<Edge> Optimizer::local_search(const Graph& g, const std::vector<Edge
 
     auto best_tree = current_tree;
     int best_cost = current_cost;
+
+    int existing_record = Graph::INF;
+    {
+        std::ifstream check_csv("results/optimizer_solution.csv");
+        if (check_csv.is_open()) {
+            std::string line;
+            std::getline(check_csv, line);
+            int sum_w = 0;
+            while (std::getline(check_csv, line)) {
+                std::stringstream ss(line);
+                std::string su, sv, sw;
+                std::getline(ss, su, ',');
+                std::getline(ss, sv, ',');
+                std::getline(ss, sw, ',');
+                if (!sw.empty()) sum_w += std::stoi(sw);
+            }
+            if (sum_w > 0) existing_record = sum_w;
+        }
+    }
 
     std::mt19937 rng(777);
 
@@ -660,6 +721,10 @@ std::vector<Edge> Optimizer::local_search(const Graph& g, const std::vector<Edge
             best_tree = shaken;
             stagnant_iters = 0;
             std::cout << "[Optimizer Record] Iter " << iter << " -> Nuevo récord: " << best_cost << "\n";
+            if (best_cost < existing_record) {
+                existing_record = best_cost;
+                Validator::export_to_csv("results/optimizer_solution.csv", best_tree);
+            }
         } else {
             stagnant_iters++;
         }

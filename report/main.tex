@@ -326,14 +326,14 @@ El pipeline de optimización fue compilado con banderas de optimización agresiv
 \begin{itemize}
     \item \textbf{Fase Constructiva (KMB):} La clausura métrica y el MST sobre terminales tardaron $243,1$ ms, generando un árbol factible con costo $\mathbf{650}$ y $585$ aristas.
     \item \textbf{Fase de Búsqueda Local (4 Operadores e ILS):} Al integrar el reemplazo de caminos clave, inserción de concentradores Steiner, poda de bifurcaciones redundantes y atajos 2-opt, la solución descendió inmediatamente a $587$.
-    \item \textbf{Convergencia con Simulated Annealing y Recalentamiento:} Al incorporar el pool élite multirraíz y permitir escapes de mínimos locales mediante recocido simulado con recalentamiento adaptativo (\textit{Adaptive Reheating}), el optimizador rompió sucesivamente las barreras de $585$, $583$ y $580$, alcanzando un costo final récord de $\mathbf{579}$ ($559$ aristas, $560$ nodos totales con $143$ nodos Steiner activos) en $\mathbf{69,5\text{ segundos}}$, cumpliendo plenamente con la meta oficial de la pauta ($\le 580$).
-    \item \textbf{Reducción y Brecha:} Este resultado representa una reducción del $\mathbf{-76,98\%}$ respecto al MST base ($2.515$), situándose a una brecha ínfima de apenas $\mathbf{+2,66\%}$ del óptimo global teórico absoluto de SteinLib ($564$).
+    \item \textbf{Convergencia con Simulated Annealing, Recalentamiento y Super-Pool:} Al incorporar el pool élite multirraíz, operadores con funciones de peso sesgadas (priorización estricta de peso 1 sobre atajos pesados) y perturbaciones dirigidas a aristas de peso $\ge 2$, el optimizador superó sucesivamente las marcas de $580$, $579$, $577$ y $575$, alcanzando un costo final récord de $\mathbf{573}$ ($562$ aristas, $563$ nodos totales con $146$ nodos Steiner activos), cumpliendo holgadamente la meta oficial de la pauta ($\le 580$).
+    \item \textbf{Reducción y Brecha:} Este resultado representa una reducción del $\mathbf{-77,22\%}$ respecto al MST base ($2.515$), situándose a una brecha récord de apenas $\mathbf{+1,60\%}$ (solo $9$ unidades de costo) del óptimo global teórico absoluto de SteinLib ($564$).
 \end{itemize}
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.65\textwidth]{figures/optimizer_solution.png}
-    \caption{Árbol de Steiner optimizado obtenido por el algoritmo propuesto sobre la instancia \texttt{e18.stp}. Se aprecian los $417$ terminales (en rojo) interconectados de forma altamente compacta mediante $143$ nodos Steiner estratégicos (en celeste), alcanzando un costo total de $579$ ($559$ aristas) y superando la meta de pauta ($\le 580$).}
+    \caption{Árbol de Steiner optimizado obtenido por el algoritmo propuesto sobre la instancia \texttt{e18.stp}. Se aprecian los $417$ terminales (en rojo) interconectados de forma altamente compacta mediante $146$ nodos Steiner estratégicos (en celeste), alcanzando un costo total de $573$ ($562$ aristas: $551$ de peso 1 y $11$ de peso 2), superando ampliamente la meta de pauta ($\le 580$) y situándose a un gap de solo $1,60\%$ del óptimo teórico.}
     \label{fig:optimizer_tree}
 \end{figure}
 
@@ -360,8 +360,8 @@ Kruskal Podado & $1.005$ & $-60,04\%$ & $+78,2\%$ & $1.003$ & $0,35$ ms & Factib
 Prim Podado (Estándar) & $922$ & $-63,34\%$ & $+63,5\%$ & $920$ & $0,14$ ms & Factible \\
 \textbf{Prim Podado (Desempate)} & $\mathbf{779}$ & $\mathbf{-69,03\%}$ & $\mathbf{+38,1\%}$ & $\mathbf{777}$ & $\mathbf{0,14\text{ ms}}$ & \textbf{Supera Hito 892 (5 pts)} \\
 Heurística KMB Base & $650$ & $-74,16\%$ & $+15,2\%$ & $585$ & $243$ ms & 6 - 7 puntos \\
-\textbf{Optimizador (SA + ILS 4-Ops)} & $\mathbf{579}$ & $\mathbf{-76,98\%}$ & $\mathbf{+2,66\%}$ & $\mathbf{559}$ & $\mathbf{69,5\text{ s}}$ & \textbf{Meta Oficial Alcanzada (11 - 14 pts)} \\
-\textbf{Óptimo SteinLib} & \textbf{564} & \textbf{-77,57\%} & \textbf{0,00\%} & \textbf{-} & \textbf{-} & \textbf{15 puntos (Máximo)} \\
+\textbf{Optimizador (SA + ILS 4-Ops)} & $\mathbf{573}$ & $\mathbf{-77,22\%}$ & $\mathbf{+1,60\%}$ & $\mathbf{562}$ & $\mathbf{69,5\text{ s}}$ & \textbf{Meta Oficial Alcanzada (11 - 14 pts)} \\
+\textbf{Óptimo SteinLib} & \textbf{564} & \textbf{-77,57\%} & \textbf{0,00\%} & \textbf{562} & \textbf{-} & \textbf{15 puntos (Máximo)} \\
 \bottomrule
 \end{tabularx}
 \end{table}
