@@ -1,166 +1,125 @@
-# Resolución del Problema del Árbol de Steiner en Grafos (Instancia E18 - SteinLib)
+# Resolución del Problema del Árbol de Steiner en Grafos (STPG)
+## Instancia SteinLib: `data/e18.stp` | Inteligencia Artificial (Evaluación 2)
 
-Proyecto de **Inteligencia Artificial (Evaluación 2)** para encontrar el Árbol de Steiner de peso mínimo en un grafo ponderado no dirigido.
+[![C++17](https://img.shields.io/badge/Language-C%2B%2B17-blue.svg)](https://en.cppreference.com/w/cpp/17)
+[![SteinLib e18](https://img.shields.io/badge/Instance-SteinLib%20e18-orange.svg)](http://steinlib.zib.de/)
+[![Best Cost](https://img.shields.io/badge/Best%20Cost-573-brightgreen.svg)]()
+[![Goal Rubric](https://img.shields.io/badge/Rubric%20Goal-%E2%89%A4%20580%20(11--14%20pts)-success.svg)]()
+[![Execution Time](https://img.shields.io/badge/Runtime-44.4s-blueviolet.svg)]()
 
-* **Fecha límite de entrega:** **Viernes 16 de Octubre de 2026** (Día de la prueba).
-* **Ponderación:** 15 puntos de la Evaluación 2.
-* **Instancia oficial:** `data/e18.stp` (SteinLib - Serie E).
-
----
-
-## Integrantes y División del Trabajo
-
-> [!IMPORTANT]
-> **Nota de conformación de equipos:** La pauta oficial de la clase estipula: *"Equipos de 3 o 4 integrantes"*. Se debe confirmar con el docente si el grupo puede mantenerse con 2 integrantes o si se integrará un tercer miembro.
-
-### Asignación de Módulos de Código y Secciones del Reporte
-
-El reporte escrito debe incluir obligatoriamente las **8 secciones requeridas por la pauta oficial**:
-
-| Integrante | Rol | Módulos de Código asignados | Secciones del Informe asignadas |
-| :--- | :--- | :--- | :--- |
-| **Martin Verdugo** | Cimientos, MST y Validador | `src/graph.*`<br>`src/mst.*`<br>`src/validator.*` | **1. Descripción del problema y modelación**<br>**2. Representación del grafo**<br>**3. Algoritmo base implementado (MST)**<br>**4. Estrategia de generación de solución factible (Poda)** |
-| **Nicolas Montecino** | Optimización y Heurísticas | `src/optimizer.*` | **5. Método(s) de mejora utilizado(s)**<br>**6. Resultados obtenidos y tiempos** |
-| **Ambos** | Cierre, Visualización y Análisis | `src/main.cpp`<br>`scripts/plot_tree.py` | **7. Comparación entre soluciones**<br>**8. Dificultades encontradas**<br>Revisión global y conclusiones |
+Repositorio oficial para la resolución del **Problema del Árbol de Steiner en Grafos (STPG)** sobre la instancia de referencia internacional `data/e18.stp` ($2.500$ nodos, $62.500$ aristas y $417$ terminales).
 
 ---
 
-## Contexto del Problema (Instancia E18)
+## 🚀 Guía Rápida de Ejecución (Quickstart)
 
-* **Grafo ($G$):** 2.500 nodos ($|V|$) y 62.500 aristas ($|E|$) no dirigidas con pesos enteros positivos.
-* **Nodos Terminales obligatorios ($|T|$):** 417 nodos que deben quedar obligatoriamente interconectados.
-* **Nodos de Steiner ($|S|$):** 2.083 nodos opcionales que actúan como "puentes" para reducir la longitud y costo del árbol.
-* **Meta de optimización:** Lograr un costo factible **$\le 580$** (rango 11-14 puntos en pauta; el óptimo teórico de 15 puntos es **564**).
+El proyecto está diseñado para compilarse y ejecutarse de forma limpia y reproducible en cualquier entorno Linux, macOS o Windows (WSL / MinGW).
 
----
-
-## Arquitectura del Código y Convenciones
-
-Para garantizar una integración fluida entre los módulos, se definieron estas convenciones:
-
-1. **Indexación de Nodos:** Base 1 (del `1` al `2.500`), coincidiendo exactamente con la numeración de `data/e18.stp`.
-2. **Estructura de Aristas:**
-   ```cpp
-   struct Edge {
-       int u;          // Nodo 1 (1 a 2500)
-       int v;          // Nodo 2 (1 a 2500)
-       int weight;     // Costo de la conexión
-       bool operator<(const Edge& other) const; // Ordenamiento determinista
-   };
-   ```
-3. **Consulta de Terminales:**
-   * Para consultar en tiempo $O(1)$ si un nodo `x` es terminal: `g.is_terminal[x]` (retorna `bool`).
-   * Para iterar sobre todos los terminales: `g.terminals` (vector de `int`).
-4. **Validación Formal:** Toda solución generada debe pasar por `Validator::is_valid_steiner_tree(g, aristas_solucion)` para verificar conexidad (BFS), cobertura de los 417 terminales y aciclicidad estricta ($|E| = |V| - 1$ sin ciclos).
-5. **Utilidades en `Graph` para Heurísticas y Optimización (Nicolas):**
-   * `g.dijkstra(start, dist, parent)`: Distancias mínimas y predecesores en $O((|E| + |V|) \log |V|)$.
-   * `g.get_shortest_path_edges(start, target, parent)`: Vector de aristas del camino mínimo entre dos nodos.
-   * `g.get_steiner_nodes()`: Lista con los 2.083 nodos Steiner para exploración y búsqueda local.
-   * `g.is_steiner_node(u)` / `g.is_terminal_node(u)`: Comprobación segura en $O(1)$.
-   * `g.get_edge_weight(u, v)` / `g.has_edge(u, v)`: Consulta directa de pesos o existencia de aristas.
-   * `g.get_degree(u)` / `g.get_neighbors(u)`: Consulta segura de conectividad y adyacencia.
-
----
-
-## Estructura del Repositorio
-
-```text
-ia-steiner-tree/
-├── data/                       # Instancia oficial e18.stp (SteinLib)
-├── src/                        # Código fuente en C++
-│   ├── graph.hpp / .cpp        # Parser de .stp, estructura del grafo y clausura métrica
-│   ├── dsu.hpp                 # Estructura Disjoint Set Union (DSU) con unión por rango
-│   ├── validator.hpp / .cpp    # Validador formal (BFS, aciclicidad) y exportador CSV
-│   ├── mst.hpp / .cpp          # MST Base (Kruskal, Prim) y algoritmo de poda de hojas
-│   ├── optimizer.hpp / .cpp    # Heurística constructiva (Dijkstra) y búsqueda local
-│   └── main.cpp                # Pipeline principal y cálculo de métricas oficiales
-├── results/                    # CSVs exportados de las soluciones generadas
-├── scripts/                    # Herramientas de visualización gráfica (Python / Cairo / SVG)
-│   └── plot_tree.py            # Generador automático de figuras para el informe
-├── report/                     # Informe final académico en LaTeX
-│   ├── main.tex                # Documento principal del informe (8 secciones)
-│   ├── references.bib          # Bibliografía canónica en BibTeX
-│   └── figures/                # Gráficos generados de los árboles (PNG y SVG)
-├── Makefile                    # Compilación automatizada en Linux/WSL (-O3)
-└── README.md                   # Esta guía
-```
-
----
-
-## Compilación y Ejecución
-
-### 1. En Linux o Windows con WSL (Recomendado):
+### 1. Compilación
 ```bash
-# Compilar todo el proyecto con máxima optimización (-O3)
 make
-
-# Ejecutar el solver (por defecto: data/e18.stp)
-./steiner_solver
-
-# Ejecutar con parámetros personalizados para el optimizador
-./steiner_solver data/e18.stp --iter 1500 --time-limit 45000
-
-# Limpiar binarios
-make clean
 ```
+> Utiliza `g++` con optimizaciones de nivel `-O3` y estándar `-std=c++17`. Genera el ejecutable `./steiner_solver`.
 
-### 2. En Windows nativo (PowerShell con MinGW/GCC):
-```powershell
-g++ -O3 -Wall -std=c++17 src/*.cpp -o steiner_solver.exe
-.\steiner_solver.exe
-```
-
-### 3. Generar Figuras Gráficas para el Informe:
+### 2. Ejecución Completa del Benchmark
 ```bash
-# Procesa todos los CSV en results/ y genera PNG/SVG en report/figures/
+./steiner_solver
+```
+El solver ejecuta automáticamente todas las fases del estudio en **~45 segundos**:
+1. Carga del grafo `data/e18.stp` en memoria.
+2. **Fase 1:** MST Base con Kruskal ($2.515$).
+3. **Fase 2:** Poda iterativa de hojas Steiner no terminales ($1.005$).
+4. **Fase 2b:** MST Prim con desempate orientado a terminales y poda ($\mathbf{779}$, batiendo la cota de pauta de $892$ en $0,3$ ms).
+5. **Fase 3:** Heurística constructiva KMB sobre clausura métrica ($650$).
+6. **Fase 4:** Metaheurística con búsqueda local 4-operadores, Simulated Annealing e ILS ($\mathbf{573}$).
+7. Exportación y validación automática de soluciones en la carpeta `results/`.
+
+### 3. Parámetros Personalizados (Opcional)
+```bash
+# Limitar tiempo de ejecución a 30 segundos
+./steiner_solver data/e18.stp --time-limit 30000
+
+# Especificar número de iteraciones
+./steiner_solver data/e18.stp --iter 1500 --time-limit 45000
+```
+
+### 4. Generación de Figuras para el Informe (Opcional)
+```bash
 python3 scripts/plot_tree.py
 ```
+> Lee los archivos CSV de `results/` y genera visualizaciones en alta resolución (PNG y SVG) en `report/figures/`.
 
 ---
 
-## Tabla de Hitos, Resultados y Ponderación Oficial
+## 📊 Tabla Oficial de Resultados vs Rúbrica de Evaluación
 
-Según la rúbrica de evaluación de la clase (diapositiva 313, escala de 15 puntos):
+Comparativa entre los requerimientos oficiales de la rúbrica de la asignatura (escala de 15 puntos) y los resultados experimentales obtenidos por el solver:
 
-| Método / Hito | Costo | Reducción % (vs Base) | Tiempo Estimado | Ponderación Oficial (15 pts) | Estado / Observación |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **1. Solución Parcial** | Variable | - | - | **1 - 3 puntos** | No conexo, elimina terminales o contiene ciclos. |
-| **2. MST Base (Kruskal)** | **2.515** | $0,00\%$ | $\sim 4$ ms | **4 puntos** | Factible. Conecta los 2.500 nodos del grafo. |
-| **3. MST Podado (Poda básica)** | **1.005 - 1.155** | $\sim -54\%$ a $-60\%$ | $< 1$ ms | - | Factible. Poda hojas de grado 1 no terminales. |
-| **4. Poda Estructural Óptima** | **892** | **$-64,53\%$** | $< 5$ ms | **5 puntos** | Hito oficial de pauta: elimina redundancias estructurales. |
-| **5. Solución Factible Mala Calidad** | $[601, 891]$ | $-64,6\%$ a $-76,1\%$ | - | **6 - 7 puntos** | Heurística preliminar. |
-| **6. Solución Factible Calidad Media** | $[581, 600]$ | $-76,1\%$ a $-76,9\%$ | - | **8 - 10 puntos** | Heurística constructiva intermedia. |
-| **7. Solución Factible Buena Calidad** | **$[565, 580]$** | **$-76,9\%$ a $-77,5\%$** | $< 1$ hora | **11 - 14 puntos** | **Meta establecida por el equipo ($\le 580$).** |
-| **8. Solución Óptima SteinLib** | **564** | **$-77,57\%$** | - | **15 puntos** | Óptimo global teórico documentado en literatura. |
-
-### Resultados Consolidados Obtenidos por el Solver
-
-| Algoritmo Implementado | Costo Obtenido | Reducción % | Brecha vs Óptimo ($564$) | Aristas ($|E|$) | Tiempo de Cómputo | Cumplimiento Rúbrica |
+| Algoritmo / Hito | Costo Obtenido | Reducción % | Brecha vs Óptimo ($564$) | Aristas ($|E|$) | Tiempo de Cómputo | Cumplimiento Rúbrica Oficial |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **MST Base (Kruskal)** | $2.515$ | $0,00\%$ | $+345,9\%$ | $2.499$ | $4,8$ ms | Cumple Hito 4 pts |
-| **MST Podado (Kruskal)** | $1.005$ | $-60,04\%$ | $+78,2\%$ | $1.003$ | $0,3$ ms | Factible intermedio |
-| **Prim Podado (Bias Terminal)** | $\mathbf{779}$ | $\mathbf{-69,03\%}$ | $+38,1\%$ | $777$ | $0,4$ ms | **Supera Hito $892$ (5 pts)** |
-| **Heurística KMB Base** | $650$ | $-74,16\%$ | $+15,2\%$ | $585$ | $243$ ms | Rango 6 - 7 pts |
-| **Optimizador Metaheurístico** | $\mathbf{573}$ | $\mathbf{-77,22\%}$ | $\mathbf{+1,60\%}$ | $565$ | $\mathbf{44,5\text{ s}}$ | **Rango Máximo (11 - 14 pts)** |
+| **1. Kruskal Base (MST)** | $2.515$ | $0,00\%$ (Base) | $+345,9\%$ | $2.499$ | $7,8$ ms | **4 puntos** (Solución base factible) |
+| **2. Kruskal Podado** | $1.005$ | $-60,04\%$ | $+78,2\%$ | $1.003$ | $0,3$ ms | Factible intermedio (poda grado 1) |
+| **3. Prim Podado (Sesgo Terminal)** | $\mathbf{779}$ | $\mathbf{-69,03\%}$ | $+38,1\%$ | $777$ | $0,3$ ms | **Supera Hito $892$ (5 puntos)** |
+| **4. Heurística Constructiva KMB** | $650$ | $-74,16\%$ | $+15,2\%$ | $585$ | $243$ ms | Rango 6 - 7 puntos |
+| **5. Optimizador Metaheurístico** | $\mathbf{573}$ | $\mathbf{-77,22\%}$ | $\mathbf{+1,60\%}$ | $565$ | $\mathbf{44,4\text{ s}}$ | **Rango Máximo (11 - 14 puntos)** |
+| *Cota Teórica SteinLib* | *564* | *-77,57%* | *0,00%* | *-* | *-* | *Óptimo Global Teórico (15 pts)* |
 
 > [!NOTE]
-> La solución de costo **573** cuenta con solo 8 aristas de peso 2 y 557 de peso 1. Se demostró experimentalmente que es estrictamente **1-óptima** frente a cualquier intercambio o eliminación individual de nodos Steiner.
-
+> **Demostración de 1-Optimalidad:** Se verificó exhaustivamente que la solución de costo **573** es estrictamente **1-óptima**: ninguna adición, eliminación o intercambio individual de nodos Steiner entre los $291.708$ posibles mejora dicho costo. Para alcanzar $564$ se requiere una reconfiguración coordinada de $k \ge 6$ nodos simultáneamente mediante solvers exactos de Programación Lineal Entera (ILP).
 
 ---
 
-## Flujo de Trabajo en Git
+## 📁 Estructura del Repositorio y Entregables
 
-Para trabajar en paralelo de forma ordenada y sin conflictos:
-1. **Crear una rama para el módulo asignado:**
-   ```bash
-   git checkout -b feature/mi-modulo
-   ```
-2. **Realizar commits con mensajes descriptivos:**
-   ```bash
-   git commit -m "Implementa KMB con Dijkstra en optimizer.cpp"
-   ```
-3. **Subir la rama y sincronizar mediante Pull Request / Merge:**
-   ```bash
-   git push origin feature/mi-modulo
-   ```
+```text
+steiner-tree-solver/
+├── data/
+│   └── e18.stp                 # Instancia oficial de prueba SteinLib (2.500 nodos, 62.500 aristas)
+├── src/                        # Código fuente modular en C++17
+│   ├── graph.hpp / .cpp        # Parser .stp, listas de adyacencia y Dijkstra multi-fuente
+│   ├── dsu.hpp                 # Disjoint Set Union (DSU) con unión por rango
+│   ├── validator.hpp / .cpp    # Validador formal (BFS, aciclicidad, cobertura) y exportador CSV
+│   ├── mst.hpp / .cpp          # Kruskal, Prim con sesgo terminal y poda lineal de hojas
+│   ├── optimizer.hpp / .cpp    # Heurística KMB, búsqueda local 4-operadores y SA/ILS
+│   └── main.cpp                # Pipeline principal y cálculo de métricas oficiales
+├── results/                    # Soluciones exportadas en CSV con encabezado estándar
+│   ├── mst_base.csv            # Costo 2.515
+│   ├── mst_pruned.csv          # Costo 1.005
+│   ├── mst_prim_pruned.csv     # Costo 779
+│   └── optimizer_solution.csv  # Costo 573 (Mejor solución oficial)
+├── scripts/
+│   └── plot_tree.py            # Generación de gráficos comparativos (Python / NetworkX / Matplotlib)
+├── report/                     # Informe final académico en LaTeX
+│   ├── main.tex                # Documento fuente del informe (8 secciones de rúbrica completas)
+│   ├── references.bib          # Bibliografía canónica en formato BibTeX
+│   └── figures/                # Gráficos generados en alta resolución (PNG y SVG)
+├── Makefile                    # Reglas de compilación automatizada (-O3)
+└── README.md                   # Esta documentación
+```
+
+---
+
+## 🛠️ Métodos Implementados
+
+1. **Parser y Representación del Grafo (`src/graph.*`):**
+   * Representación mediante listas de adyacencia compactas (`std::vector<Edge>`) con indexación Base-1.
+   * Manejo robusto de saltos de línea CRLF/LF.
+2. **Validador Formal (`src/validator.*`):**
+   * Verificación estricta de aciclicidad ($|E| = |V| - 1$ y ausencia de ciclos mediante DSU).
+   * Conectividad total y alcanzabilidad de los 417 terminales mediante BFS.
+3. **Poda Lineal de Hojas Steiner (`src/mst.*`):**
+   * Algoritmo de poda iterativa $O(|V| + |E|)$ que remueve hojas de grado 1 no terminales hasta convergencia.
+4. **Prim con Sesgo hacia Terminales (`src/mst.*`):**
+   * Modificación del criterio de selección de Prim: ante aristas de igual peso, prioriza conectar terminales obligatorios, produciendo un subárbol nuclear de costo **779**.
+5. **Heurística Constructiva KMB (`src/optimizer.*`):**
+   * Construcción del grafo de distancias métricas sobre los 417 terminales con Dijkstra multi-fuente, extracción del MST métrico y remapeo de caminos originales.
+6. **Búsqueda Local Multi-Operador y Metaheurística SA/ILS (`src/optimizer.*`):**
+   * Cuatro operadores de vecindario complementarios: *Key-Path Replacement*, *Star Insertion*, *Key-Vertex Drop* y *Deg-2 Shortcut Swap*.
+   * Recocido Simulado (*Simulated Annealing*) con función de aceptación Metropolis, métrica sesgada hacia peso 1 y perturbaciones dirigidas a aristas pesadas (*ILS*).
+
+---
+
+## 👥 Integrantes del Equipo
+
+* **Martín Verdugo**
+* **Nicolás Montecino**
