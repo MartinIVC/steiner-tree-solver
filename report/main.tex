@@ -325,15 +325,15 @@ El pipeline de optimización fue compilado con banderas de optimización agresiv
 
 \begin{itemize}
     \item \textbf{Fase Constructiva (KMB):} La clausura métrica y el MST sobre terminales tardaron $243,1$ ms, generando un árbol factible con costo $\mathbf{650}$ y $585$ aristas.
-    \item \textbf{Fase de Búsqueda Local (Tri-Operador e ILS):} En la primera ronda de descenso local, el costo disminuyó rápidamente desde $650$ a $587$ en menos de $2$ segundos, gracias a $53$ reemplazos de caminos clave, $6$ inserciones de nodos Steiner y $3$ eliminaciones de bifurcaciones.
-    \item \textbf{Convergencia Final ILS:} Mediante perturbaciones controladas, el optimizador refinó la solución hasta alcanzar un costo final de $\mathbf{586}$ ($550$ aristas, $551$ nodos totales de los cuales $134$ corresponden a nodos Steiner óptimamente seleccionados) en un tiempo total de cómputo de tan solo $\mathbf{7,06\text{ segundos}}$.
-    \item \textbf{Reducción y Brecha:} Este resultado representa una reducción del $\mathbf{-76,70\%}$ respecto a la solución base del MST de Kruskal ($2.515$), situándose a tan solo $+3,9\%$ de distancia del óptimo global teórico absoluto ($564$).
+    \item \textbf{Fase de Búsqueda Local (4 Operadores e ILS):} Al integrar el reemplazo de caminos clave, inserción de concentradores Steiner, poda de bifurcaciones redundantes y atajos 2-opt, la solución descendió inmediatamente a $587$.
+    \item \textbf{Convergencia con Simulated Annealing y Recalentamiento:} Al incorporar el pool élite multirraíz y permitir escapes de mínimos locales mediante recocido simulado con recalentamiento adaptativo (\textit{Adaptive Reheating}), el optimizador rompió sucesivamente las barreras de $585$, $583$ y $580$, alcanzando un costo final récord de $\mathbf{579}$ ($559$ aristas, $560$ nodos totales con $143$ nodos Steiner activos) en $\mathbf{69,5\text{ segundos}}$, cumpliendo plenamente con la meta oficial de la pauta ($\le 580$).
+    \item \textbf{Reducción y Brecha:} Este resultado representa una reducción del $\mathbf{-76,98\%}$ respecto al MST base ($2.515$), situándose a una brecha ínfima de apenas $\mathbf{+2,66\%}$ del óptimo global teórico absoluto de SteinLib ($564$).
 \end{itemize}
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.65\textwidth]{figures/optimizer_solution.png}
-    \caption{Árbol de Steiner optimizado obtenido por el algoritmo propuesto sobre la instancia \texttt{e18.stp}. Se aprecian los $417$ terminales (en rojo) interconectados de forma compacta mediante únicamente $134$ nodos Steiner estratégicos (en celeste), alcanzando un costo total de $586$ ($550$ aristas).}
+    \caption{Árbol de Steiner optimizado obtenido por el algoritmo propuesto sobre la instancia \texttt{e18.stp}. Se aprecian los $417$ terminales (en rojo) interconectados de forma altamente compacta mediante $143$ nodos Steiner estratégicos (en celeste), alcanzando un costo total de $579$ ($559$ aristas) y superando la meta de pauta ($\le 580$).}
     \label{fig:optimizer_tree}
 \end{figure}
 
@@ -360,7 +360,7 @@ Kruskal Podado & $1.005$ & $-60,04\%$ & $+78,2\%$ & $1.003$ & $0,35$ ms & Factib
 Prim Podado (Estándar) & $922$ & $-63,34\%$ & $+63,5\%$ & $920$ & $0,14$ ms & Factible \\
 \textbf{Prim Podado (Desempate)} & $\mathbf{779}$ & $\mathbf{-69,03\%}$ & $\mathbf{+38,1\%}$ & $\mathbf{777}$ & $\mathbf{0,14\text{ ms}}$ & \textbf{Supera Hito 892 (5 pts)} \\
 Heurística KMB Base & $650$ & $-74,16\%$ & $+15,2\%$ & $585$ & $243$ ms & 6 - 7 puntos \\
-\textbf{Optimizador (ILS Tri-Operador)} & $\mathbf{586}$ & $\mathbf{-76,70\%}$ & $\mathbf{+3,9\%}$ & $\mathbf{550}$ & $\mathbf{7,06\text{ s}}$ & \textbf{Rango Meta (11 - 14 pts)} \\
+\textbf{Optimizador (SA + ILS 4-Ops)} & $\mathbf{579}$ & $\mathbf{-76,98\%}$ & $\mathbf{+2,66\%}$ & $\mathbf{559}$ & $\mathbf{69,5\text{ s}}$ & \textbf{Meta Oficial Alcanzada (11 - 14 pts)} \\
 \textbf{Óptimo SteinLib} & \textbf{564} & \textbf{-77,57\%} & \textbf{0,00\%} & \textbf{-} & \textbf{-} & \textbf{15 puntos (Máximo)} \\
 \bottomrule
 \end{tabularx}

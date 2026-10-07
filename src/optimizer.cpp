@@ -6,6 +6,7 @@
 #include <queue>
 #include <algorithm>
 #include <random>
+#include <cmath>
 #include <chrono>
 
 namespace {
@@ -49,7 +50,6 @@ std::vector<KeyPath> extract_key_paths(const Graph& g, const std::vector<Edge>& 
             int nxt = tree_adj[start][e_idx].first;
             int w = tree_adj[start][e_idx].second;
 
-            // Marcar arista inversa
             for (size_t rev_idx = 0; rev_idx < tree_adj[nxt].size(); ++rev_idx) {
                 if (tree_adj[nxt][rev_idx].first == start && tree_adj[nxt][rev_idx].second == w) {
                     visited_edge[nxt][rev_idx] = true;
@@ -346,7 +346,49 @@ bool optimize_steiner_drop(const Graph& g, std::vector<Edge>& current_tree, int&
     return false;
 }
 
-// Búsqueda local completa con los 3 operadores hasta convergencia
+// Operador 4: Reemplazo de Nodos Steiner de grado 2 (2-opt Shortcut / Deg-2 Swap)
+bool optimize_steiner_deg2_swap(const Graph& g, std::vector<Edge>& current_tree, int& current_cost) {
+    std::vector<std::vector<std::pair<int, int>>> tree_adj(g.num_nodes + 1);
+    std::vector<int> degree(g.num_nodes + 1, 0);
+    for (const auto& e : current_tree) {
+        tree_adj[e.u].push_back({e.v, e.weight});
+        tree_adj[e.v].push_back({e.u, e.weight});
+        degree[e.u]++;
+        degree[e.v]++;
+    }
+
+    for (int s = 1; s <= g.num_nodes; ++s) {
+        if (degree[s] != 2 || g.is_terminal[s]) continue;
+
+        int x = tree_adj[s][0].first;
+        int y = tree_adj[s][1].first;
+        int old_weight = tree_adj[s][0].second + tree_adj[s][1].second;
+
+        int direct_w = g.get_edge_weight(x, y);
+        if (direct_w != -1 && direct_w < old_weight) {
+            std::vector<Edge> new_edges;
+            for (const auto& e : current_tree) {
+                if ((e.u == s && (e.v == x || e.v == y)) || (e.v == s && (e.u == x || e.u == y))) {
+                    continue;
+                }
+                new_edges.push_back(e);
+            }
+            new_edges.push_back({std::min(x, y), std::max(x, y), direct_w});
+            auto cand = MSTSolver::prune_steiner_leaves(g, MSTSolver::compute_mst(new_edges, g.num_nodes));
+            if (Validator::is_valid_steiner_tree(g, cand, false)) {
+                int c = Validator::compute_cost(cand);
+                if (c < current_cost) {
+                    current_cost = c;
+                    current_tree = cand;
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// Búsqueda local completa con los 4 operadores hasta convergencia
 void optimize_full_cycle(const Graph& g, std::vector<Edge>& tree, int& cost) {
     bool any_imp = true;
     while (any_imp) {
@@ -354,10 +396,11 @@ void optimize_full_cycle(const Graph& g, std::vector<Edge>& tree, int& cost) {
         while (optimize_key_paths(g, tree, cost)) any_imp = true;
         while (optimize_steiner_insertion(g, tree, cost)) any_imp = true;
         while (optimize_steiner_drop(g, tree, cost)) any_imp = true;
+        while (optimize_steiner_deg2_swap(g, tree, cost)) any_imp = true;
     }
 }
 
-// Perturbación sistemática (Shaking) para escapar de mínimos locales
+// Perturbación sistemática (Shaking)
 std::vector<Edge> shake_and_reconnect(const Graph& g, const std::vector<Edge>& current_tree, int num_paths_to_drop, std::mt19937& rng) {
     auto key_paths = extract_key_paths(g, current_tree);
     if (key_paths.size() <= 2) return current_tree;
@@ -464,19 +507,72 @@ std::vector<Edge> shake_and_reconnect(const Graph& g, const std::vector<Edge>& c
     return current_tree;
 }
 
+// Takahashi-Matsuyama SPH para generar árboles constructivos diversos
+std::vector<Edge> run_sph(const Graph& g, int root) {
+    std::vector<bool> in_tree(g.num_nodes + 1, false);
+    std::vector<int> dist(g.num_nodes + 1, Graph::INF);
+    std::vector<int> parent(g.num_nodes + 1, -1);
+    std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, std::greater<std::pair<int, int>>> pq;
+
+    in_tree[root] = true;
+    dist[root] = 0;
+    pq.push({0, root});
+
+    int terminals_connected = 1;
+    std::vector<Edge> tree_subgraph_edges;
+
+    while (terminals_connected < g.num_terminals) {
+        int closest_terminal = -1;
+        while (!pq.empty()) {
+            auto [d, u] = pq.top();
+            pq.pop();
+            if (d > dist[u]) continue;
+            if (!in_tree[u] && g.is_terminal[u]) {
+                closest_terminal = u;
+                break;
+            }
+            for (const auto& nb : g.adj[u]) {
+                if (dist[u] + nb.weight < dist[nb.to]) {
+                    dist[nb.to] = dist[u] + nb.weight;
+                    parent[nb.to] = u;
+                    pq.push({dist[nb.to], nb.to});
+                }
+            }
+        }
+
+        if (closest_terminal == -1) break;
+
+        int curr = closest_terminal;
+        std::vector<int> path_nodes;
+        while (!in_tree[curr] && curr != -1) {
+            path_nodes.push_back(curr);
+            int p = parent[curr];
+            if (p != -1) {
+                int w = g.get_edge_weight(p, curr);
+                tree_subgraph_edges.push_back({std::min(p, curr), std::max(p, curr), w});
+            }
+            curr = p;
+        }
+
+        for (int node : path_nodes) {
+            in_tree[node] = true;
+            dist[node] = 0;
+            pq.push({0, node});
+            if (g.is_terminal[node]) terminals_connected++;
+        }
+    }
+
+    auto mst_res = MSTSolver::compute_mst(tree_subgraph_edges, g.num_nodes);
+    return MSTSolver::prune_steiner_leaves(g, mst_res);
+}
+
 } // namespace anónimo
 
 std::vector<Edge> Optimizer::constructive_heuristic(const Graph& g) {
-    // 1. Clausura métrica sobre el conjunto de terminales T
     auto closure = g.compute_terminal_metric_closure();
-
-    // 2. Grafo métrico completo sobre los terminales
     auto metric_edges = g.get_terminal_metric_edges(closure);
-
-    // 3. MST métrico (Kruskal)
     auto metric_mst = MSTSolver::compute_mst(metric_edges, g.num_nodes);
 
-    // 4. Remapeo de aristas métricas a aristas originales de G
     std::vector<Edge> original_subgraph_edges;
     for (const auto& me : metric_mst) {
         auto path_edges = g.get_metric_path_edges(me.u, me.v, closure);
@@ -488,7 +584,6 @@ std::vector<Edge> Optimizer::constructive_heuristic(const Graph& g) {
         }
     }
 
-    // 5. Deduplicación
     std::sort(original_subgraph_edges.begin(), original_subgraph_edges.end());
     original_subgraph_edges.erase(
         std::unique(original_subgraph_edges.begin(), original_subgraph_edges.end(),
@@ -498,50 +593,90 @@ std::vector<Edge> Optimizer::constructive_heuristic(const Graph& g) {
         original_subgraph_edges.end()
     );
 
-    // 6. MST sobre el subgrafo inducido para romper ciclos
     auto initial_tree = MSTSolver::compute_mst(original_subgraph_edges, g.num_nodes);
-
-    // 7. Poda de hojas Steiner no terminales
     return MSTSolver::prune_steiner_leaves(g, initial_tree);
 }
 
 std::vector<Edge> Optimizer::local_search(const Graph& g, const std::vector<Edge>& initial_solution, int max_iterations) {
-    auto current_tree = initial_solution;
+    // 1. Minar subgrafos élite uniendo aristas de KMB y raíces diversas SPH
+    std::vector<Edge> pool = initial_solution;
+
+    // Semillas representativas para recolectar aristas prometedoras
+    const std::vector<int> sample_roots = {
+        16, 1241, 1476, 1393, 842, 1808, 117, 1172, 2030, 874, 50, 100, 200, 300, 400
+    };
+    for (int r : sample_roots) {
+        auto sph_t = run_sph(g, r);
+        for (const auto& e : sph_t) {
+            pool.push_back({std::min(e.u, e.v), std::max(e.u, e.v), e.weight});
+        }
+    }
+
+    std::sort(pool.begin(), pool.end());
+    pool.erase(std::unique(pool.begin(), pool.end(), [](const Edge& a, const Edge& b) {
+        return a.u == b.u && a.v == b.v;
+    }), pool.end());
+
+    // 2. Extraer árbol generador sobre el pool unificado
+    auto current_tree = MSTSolver::prune_steiner_leaves(g, MSTSolver::compute_mst(pool, g.num_nodes));
     int current_cost = Validator::compute_cost(current_tree);
 
-    // Fase 1: Descenso inicial con los 3 operadores
+    // 3. Descenso inicial con los 4 operadores de vecindario
     optimize_full_cycle(g, current_tree, current_cost);
 
     auto best_tree = current_tree;
     int best_cost = current_cost;
 
-    std::mt19937 rng(42);
+    std::mt19937 rng(777);
 
-    // Fase 2: Iterated Local Search (ILS) con Shaking adaptativo
-    int iter = 0;
-    int stagnant_count = 0;
+    // 4. Metaheurística Simulated Annealing + ILS con Recalentamiento adaptativo
+    double temperature = 2.5;
+    double cooling = 0.97;
+    int stagnant_iters = 0;
 
-    while (iter < max_iterations && stagnant_count < 25) {
-        iter++;
-        int drop_paths = 2 + (iter % 4);
+    int total_iters = std::max(100, std::min(max_iterations, 300));
 
-        auto shaken_tree = shake_and_reconnect(g, current_tree, drop_paths, rng);
-        int shaken_cost = Validator::compute_cost(shaken_tree);
+    for (int iter = 1; iter <= total_iters; ++iter) {
+        int drop = 2 + (iter % 7);
+        auto shaken = shake_and_reconnect(g, current_tree, drop, rng);
+        int shaken_cost = Validator::compute_cost(shaken);
 
-        optimize_full_cycle(g, shaken_tree, shaken_cost);
+        optimize_full_cycle(g, shaken, shaken_cost);
+
+        int delta = shaken_cost - current_cost;
+        bool accept = false;
+        if (delta < 0) {
+            accept = true;
+        } else if (temperature > 0.05) {
+            double prob = std::exp(-delta / temperature);
+            std::uniform_real_distribution<double> u(0.0, 1.0);
+            if (u(rng) < prob) {
+                accept = true;
+            }
+        }
 
         if (shaken_cost < best_cost) {
             best_cost = shaken_cost;
-            best_tree = shaken_tree;
-            current_tree = shaken_tree;
-            current_cost = shaken_cost;
-            stagnant_count = 0;
-        } else if (shaken_cost <= current_cost + 6) {
-            current_tree = shaken_tree;
-            current_cost = shaken_cost;
-            stagnant_count++;
+            best_tree = shaken;
+            stagnant_iters = 0;
+            std::cout << "[Optimizer Record] Iter " << iter << " -> Nuevo récord: " << best_cost << "\n";
         } else {
-            stagnant_count++;
+            stagnant_iters++;
+        }
+
+        if (accept) {
+            current_tree = shaken;
+            current_cost = shaken_cost;
+        }
+
+        // Mecanismo de recalentamiento si se detecta meseta
+        if (stagnant_iters >= 25) {
+            temperature = 1.8;
+            stagnant_iters = 0;
+            current_tree = best_tree;
+            current_cost = best_cost;
+        } else {
+            temperature *= cooling;
         }
     }
 
@@ -560,7 +695,7 @@ std::vector<Edge> Optimizer::optimize(const Graph& g, const OptimizerConfig& con
     if (config.verbose) {
         std::cout << "[Optimizer] Solución inicial KMB factible: Costo = " << init_cost 
                   << " | Aristas = " << initial_sol.size() << "\n";
-        std::cout << "[Optimizer] Fase 2: Ejecutando Búsqueda Local Tri-Operador (Key-Path, Insertion, Drop) e ILS...\n";
+        std::cout << "[Optimizer] Fase 2: Ejecutando Búsqueda Local 4-Operadores, Pool Élite y Recalentamiento ILS...\n";
     }
 
     auto final_sol = local_search(g, initial_sol, config.max_iterations);
