@@ -79,11 +79,11 @@
 \maketitle
 
 \begin{abstract}
-El presente trabajo aborda la resolución computacional del \textbf{Problema del Árbol de Steiner en Grafos (STPG)}, un problema fundamental de optimización combinatoria de clase \textbf{NP-Hard}. Se analiza la instancia real \texttt{e18.stp} del repositorio de referencia internacional \textit{SteinLib}, compuesta por $2.500$ nodos, $62.500$ aristas y $417$ nodos terminales obligatorios. Se implementa una solución base fundamentada en el Árbol Generador Mínimo (MST) mediante el algoritmo de Kruskal optimizado con la estructura Disjoint Set Union (DSU) con unión por rango, alcanzando un costo inicial de $2.515$ en $\sim 4$ ms. Posteriormente, se demuestra y aplica un algoritmo lineal de poda iterativa de hojas Steiner no terminales que reduce el costo en un $-60,04\%$ ($1.005$ unidades de costo) en $0,2$ ms, preservando la conexidad y aciclicidad estricta. Finalmente, se modelan y evalúan heurísticas de mejora para aproximarse al óptimo teórico global de $564$.
+El presente trabajo aborda la resolución computacional del \textbf{Problema del Árbol de Steiner en Grafos (STPG)}, un problema fundamental de optimización combinatoria de clase \textbf{NP-Hard}. Se analiza la instancia real \texttt{e18.stp} del repositorio de referencia internacional \textit{SteinLib}, compuesta por $2.500$ nodos, $62.500$ aristas y $417$ nodos terminales obligatorios. Se implementa una solución base fundamentada en el Árbol Generador Mínimo (MST) mediante Kruskal y Prim, alcanzando un costo inicial de $2.515$. Posteriormente, se demuestra y aplica un algoritmo lineal de poda iterativa de hojas Steiner que reduce el costo a $1.005$ sobre Kruskal y a $779$ sobre Prim con desempate orientado a terminales ($-69,03\%$). Finalmente, se diseña un pipeline de optimización multinivel que integra reducción de aristas dominadas, ascenso dual (\textit{Dual Ascent}), heurística constructiva por regiones de Voronoi (Mehlhorn, costo $601$) y caminos cortos multi-raíz (SPH, costo $586$), evaluación canónica por orden de saturación de estrellas (\textit{Star-Rank MST}), búsqueda local por Descenso de Vecindad Variable (VND, costo $570$), \textit{Path Relinking} (costo $568$) y Búsqueda Local Iterada (\textit{Ruin \& Recreate} por componentes), logrando una solución factible certificada de costo $\mathbf{567}$ ($-77,46\%$ respecto a la base y brecha de apenas $+0,53\%$ frente al óptimo teórico global de $564$).
 \end{abstract}
 
 \vspace{0.3cm}
-\noindent\textbf{Palabras clave:} Árbol de Steiner, Grafos Ponderados, Algoritmo de Kruskal, Poda Estructural, Heurística KMB, Inteligencia Artificial.
+\noindent\textbf{Palabras clave:} Árbol de Steiner, Grafos Ponderados, Algoritmo de Kruskal y Prim, Poda Estructural, Heurística KMB/SPH, Búsqueda Local VND, Path Relinking.
 
 \vspace{0.5cm}
 
@@ -281,20 +281,37 @@ La comparativa entre Kruskal y Prim revela hallazgos teóricos y prácticos de g
 \section{Método(s) de Mejora Utilizado(s)}
 \label{sec:heuristica}
 
-\textit{[Sección asignada a Nicolas Montecino / Heurísticas y Optimización]}
+Para cerrar la brecha entre la poda estructural ($779$) y el mínimo lógico documentado en \textit{SteinLib} ($C^* = 564$), se diseñó e implementó en \texttt{src/optimizer.cpp} una arquitectura de optimización multinivel dividida en cinco fases secuenciales.
 
-\subsection{Heurística Constructiva basada en Caminos Mínimos (KMB / Mehlhorn)}
-En lugar de calcular el MST sobre el grafo global y luego podarlo, las aproximaciones clásicas de alta calidad (como el algoritmo KMB \cite{kou1981fast} o Mehlhorn \cite{mehlhorn1988faster}) operan construyendo un grafo métrico reducido sobre los terminales obligatorios:
+\subsection{Análisis del Mínimo Lógico y Reducción Exacta del Grafo (Fase 0)}
+En la instancia \texttt{e18.stp}, cualquier árbol que interconecte $|T| = 417$ terminales utilizando $s = |V_A \setminus T|$ nodos Steiner contiene exactamente $|E_A| = 416 + s$ aristas. Dado que los pesos son enteros positivos $w(e) \ge 1$, el costo de todo árbol factible $T_A = (V_A, E_A)$ admite la descomposición exacta:
+\begin{equation}
+    \text{Costo}(T_A) = 416 + s + \sum_{e \in E_A} \big(w(e) - 1\big)
+\end{equation}
+En el óptimo teórico global ($C^* = 564$), el presupuesto conjunto para nodos Steiner y excesos de peso sobre $1$ es de apenas $564 - 416 = 148$ unidades. Además, dado que el MST del grafo completo $G$ posee costo $2.515$ sobre $2.499$ aristas, su arista de mayor peso (cuello de botella) es $2$. Esto permite aplicar una \textbf{reducción de preprocesamiento (\textit{Presolve})} descartando toda arista $(u, v)$ con $w(u, v) \ge 4$ o dominada por caminos de dos saltos $u - x - v$ de peso $w(u,x) + w(x,v) < w(u,v)$ (o igual peso a través de un terminal $x \in T$). Este filtro reduce el espacio de aristas activas de $62.500$ a $18.645$ ($-70,17\%$) en $\sim 35$ ms.
+
+De forma complementaria, se incorporó un procedimiento multi-raíz de \textbf{Ascenso Dual (\textit{Dual Ascent})} basado en la formulación de cortes dirigidos de Wong \cite{wong1984dual}. Este método incrementa iterativamente las variables duales asociadas a componentes terminales activas hasta saturar arcos entrantes ($\bar{w}(u, v) = 0$), registrando la frecuencia de saturación dual de cada arista para guiar el desempate en las fases posteriores.
+
+\subsection{Heurísticas Constructivas: Voronoi KMB y Multi-Start SPH (Fase 1)}
+En lugar de partir del grafo global sin distinguir terminales, se implementaron dos mecanismos constructivos complementarios sobre caminos mínimos:
 \begin{enumerate}
-    \item Se calculan las distancias mínimas entre pares de terminales utilizando Dijkstra multi-fuente.
-    \item Se construye el grafo completo métrico $G_M = (T, E_M)$.
-    \item Se calcula el MST sobre $G_M$.
-    \item Se reemplaza cada arista métrica por el camino mínimo original en $G$.
-    \item Se extrae el MST del subgrafo resultante y se aplican las podas de hojas.
+    \item \textbf{Algoritmo de Mehlhorn por Regiones de Voronoi \cite{kou1981fast,mehlhorn1988faster}:} Ejecuta una única búsqueda de Dijkstra multi-fuente desde los $417$ terminales en tiempo $O(|E| \log |V|)$, particionando $V$ en celdas de Voronoi asociadas al terminal más cercano $\text{orig}[u]$. Construye las aristas de frontera con peso métrico $d(u) + w(u,v) + d(v)$, resuelve el MST terminal y despliega los caminos en $G$, reduciendo el costo de inmediato a $\mathbf{601}$.
+    \item \textbf{Heurística del Camino Más Corto Multi-Raíz (\textit{Multi-Start SPH}) \cite{takahashi1980approximate}:} A diferencia de KMB (que evalúa caminos entre pares de terminales de forma independiente), el método de Takahashi-Matsuyama hace crecer iterativamente un subárbol conexo partiendo de una raíz $r \in T$ y conectando en cada paso el terminal no visitado más cercano a \textit{cualquier} nodo ya incorporado al árbol. Se introdujo una función de desempate guiada por la afinidad terminal (cantidad de terminales a distancia $1$ y $2$) y por la puntuación dual. Al ejecutar SPH desde las $417$ raíces terminales y conservar un \textit{pool} élite con las mejores topologías diversas, el costo desciende a $\mathbf{586}$ en $\sim 1,1$ s.
 \end{enumerate}
 
-\subsection{Búsqueda Local e Intercambio de Aristas}
-\textit{[Detallar la estrategia de vecindad: reconexión de caminos, intercambio de nodos Steiner candidatos y criterios de parada o enfriamiento simulado para alcanzar el rango $\le 580$].}
+\subsection{Evaluación Canónica por Saturación de Estrellas (Fase 2)}
+Un hallazgo estructural clave en grafos con predominancia de aristas de peso $1$ es que, al evaluar un subgrafo inducido $G[V_A]$ mediante Kruskal convencional, las aristas de distintos nodos Steiner se intercalan y convierten nodos Steiner redundantes en vértices internos de grado $2$, impidiendo que la poda de hojas (grado $1$) los elimine.
+
+Para resolver esta limitación, se diseñó el operador \textbf{\textit{Star-Rank MST}} de dos pasadas: se asigna rango $0$ a todos los terminales y rangos $1, \dots, |S_A|$ a los nodos Steiner activos ordenados por su grado de conexión de peso $1$. Al ordenar las aristas de igual peso lexicográficamente por $\max(\text{rank}[u], \text{rank}[v])$, Kruskal satura todas las conexiones posibles de los nodos Steiner estrella prioritarios antes de emplear nodos secundarios, forzando a los nodos Steiner redundantes a quedar con grado $1$ para su eliminación inmediata por poda lineal.
+
+\subsection{Descenso de Vecindad Variable (VND) y Metaheurística ILS (Fases 3 y 4)}
+Sobre las soluciones del \textit{pool} élite se aplica una Búsqueda Local por Descenso de Vecindad Variable (VND) \cite{ribeiro2002hybrid} compuesta por tres vecindades:
+\begin{itemize}
+    \item \textbf{Vecindad $N_1$ (Inserción de $1$, $2$ y $3$-Estrellas sobre Super-Componentes):} Se contraen las aristas de peso $1$ entre nodos clave ($\text{grado} \ge 3$ o terminales) mediante DSU y se expanden aristas de peso $2$ en puentes de dos saltos de peso $1$. Se identifican nodos Steiner inactivos (o pares y tripletas adyacentes $s_1 - s_2 - s_3$) que conecten $\ge 3$, $\ge 4$ o $\ge 5$ super-componentes distintas, reemplazando múltiples caminos de costo $\ge 2$ por estrellas de peso $1$.
+    \item \textbf{Vecindad $N_2$ (Eliminación y \textit{Swap} de Nodos de Ramificación):} Evalúa la remoción de cada nodo Steiner con grado $\ge 3$ y su sustitución simultánea por sus vecinos de peso $1$ con mayor afinidad terminal.
+    \item \textbf{Vecindad $N_3$ (Reemplazo Exacto de Caminos Clave / \textit{Key-Paths}):} Descompone el árbol en caminos clave (cadenas de nodos Steiner de grado $2$ entre nodos clave). Remueve cada camino clave pesado partiendo el árbol en dos componentes $(C_1, C_2)$ y ejecuta Dijkstra multi-fuente acotado desde $C_1$ hacia $C_2$ para hallar reconexiones más cortas en $G$.
+\end{itemize}
+Finalmente, la \textbf{Fase 4} combina pares de soluciones del \textit{pool} élite mediante \textbf{\textit{Path Relinking}} (muestreando órdenes de saturación sobre la unión de sus conjuntos de nodos Steiner) seguido de \textbf{Búsqueda Local Iterada (ILS)} con perturbación \textit{Ruin \& Recreate} focalizada en bolas BFS alrededor de los puntos débiles del árbol (aristas de peso $2$ y puentes de grado $2$) y reconstrucción por componentes (\textit{Component-SPH}).
 
 % ==============================================================================
 % SECCIÓN 6: RESULTADOS OBTENIDOS Y TIEMPOS
@@ -302,10 +319,53 @@ En lugar de calcular el MST sobre el grafo global y luego podarlo, las aproximac
 \section{Resultados Obtenidos}
 \label{sec:resultados}
 
-\textit{[Sección asignada a Nicolas Montecino / Registro de Pruebas Experimentales]}
+\subsection{Comportamiento Experimental y Convergencia por Fase}
+La Tabla \ref{tab:convergencia_opt} detalla la evolución del costo, la cantidad de aristas, los nodos Steiner utilizados y los tiempos de cómputo registrados experimentalmente a lo largo de cada fase del optimizador en un entorno Linux con compilación \texttt{g++ -O3 -std=c++17}.
 
-\subsection{Comportamiento Experimental}
-\textit{[Presentar curvas de convergencia, número de iteraciones, uso de memoria y evolución del costo a lo largo de las ejecuciones del optimizador].}
+\begin{table}[htbp]
+\centering
+\small
+\caption{Evolución progresiva del costo a través de las fases del pipeline de optimización en \texttt{e18.stp}.}
+\label{tab:convergencia_opt}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Fase del Optimizador} & \textbf{Costo} & \textbf{Gap vs. $564$} & \textbf{Aristas} & \textbf{Nodos Steiner ($|S_A|$)} & \textbf{Tiempo Acumulado} \\
+\midrule
+Fase 0: Presolve + Dual Ascent & (LB $= 524$) & - & $18.645$ (activas) & - & $37,63$ ms \\
+Fase 1a: Heurística Voronoi KMB (Mehlhorn) & $601$ & $+6,56\%$ & $551$ & $135$ & $45,20$ ms \\
+Fase 1b: Multi-Start SPH ($417$ raíces) & $586$ & $+3,90\%$ & $545$ & $129$ & $1.148,50$ ms \\
+Fase 2 y 3: Búsqueda Local VND ($N_1 + N_2 + N_3$) & $570$ & $+1,06\%$ & $563$ & $147$ & $10.140,86$ ms \\
+Fase 4a: \textit{Path Relinking} sobre Pool Élite & $568$ & $+0,71\%$ & $563$ & $147$ & $18.420,10$ ms \\
+\textbf{Fase 4b: ILS (\textit{Ruin \& Recreate}) + Compactación} & $\mathbf{567}$ & $\mathbf{+0,53\%}$ & $\mathbf{536}$ & $\mathbf{120}$ & $\mathbf{40.598,07\text{ ms}}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El análisis de convergencia evidencia cómo cada etapa resuelve una limitación estructural específica:
+\begin{itemize}
+    \item La transición desde Prim Podado ($779$) hacia \textbf{Voronoi KMB ($601$)} y \textbf{Multi-Start SPH ($586$)} elimina las largas cadenas periféricas en apenas $1,15$ segundos.
+    \item El descenso \textbf{VND ($586 \to 570$)} sustituye sistemáticamente pares y tripletas de caminos de costo $2$ por nodos Steiner estrella de grado $\ge 3$, ingresando holgadamente al rango de excelencia de la pauta ($\le 580$) en $\sim 10$ segundos.
+    \item El acoplamiento de \textbf{\textit{Path Relinking} ($570 \to 568$)} y \textbf{ILS focalizado en puntos débiles ($568 \to 567$)} logra escapar de los mínimos locales, culminando en una red altamente compacta de $536$ aristas ($537$ nodos: $417$ terminales y $120$ nodos Steiner) y costo total $\mathbf{567}$, a tan solo $3$ unidades del mínimo teórico global ($564$).
+\end{itemize}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.47\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/mst_prim_pruned.png}
+        \caption{Prim Podado Priorizado ($|E| = 777$, Costo $= 779$).}
+        \label{fig:prim_vs_opt_1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.47\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/optimizer_solution.png}
+        \caption{Solución Optimizador Final ($|E| = 536$, Costo $= 567$).}
+        \label{fig:optimizer_solution}
+    \end{subfigure}
+    \caption{Contraste topológico entre la mejor poda sobre MST global (izquierda, $361$ nodos Steiner y costo $779$) y la solución final del optimizador (derecha, $120$ nodos Steiner y costo $567$). Se aprecia la drástica compactación de los nodos Steiner (cian) que actúan exclusivamente como centros estrella de peso $1$ entre terminales (rojo).}
+    \label{fig:opt_visual}
+\end{figure}
 
 % ==============================================================================
 % SECCIÓN 7: COMPARACIÓN ENTRE SOLUCIONES
@@ -314,25 +374,26 @@ En lugar de calcular el MST sobre el grafo global y luego podarlo, las aproximac
 \label{sec:comparacion}
 
 \subsection{Consolidado Global de Métricas}
-En la Tabla \ref{tab:resumen_global} se contrastan todos los métodos desarrollados contra los hitos de la rúbrica oficial de evaluación.
+En la Tabla \ref{tab:resumen_global} se contrastan todos los métodos implementados y validados formalmente mediante \texttt{Validator::is\_valid\_steiner\_tree} frente a los hitos de la rúbrica oficial de evaluación.
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Tabla comparativa global de resultados y ponderación según pauta oficial.}
+\caption{Tabla comparativa global de resultados experimentales y ponderación según pauta oficial.}
 \label{tab:resumen_global}
 \begin{tabularx}{\textwidth}{lcccccX}
 \toprule
 \textbf{Método} & \textbf{Costo} & \textbf{Reducción \%} & \textbf{Gap vs Óptimo} & \textbf{Aristas} & \textbf{Tiempo} & \textbf{Pauta Oficial} \\
 \midrule
-MST Base (Kruskal / Prim) & $2.515$ & $0,00\%$ & $+345,9\%$ & $2.499$ & $\sim 4,8$ ms & 4 puntos \\
-Kruskal Podado & $1.005$ & $-60,04\%$ & $+78,2\%$ & $1.003$ & $0,35$ ms & Factible (Poda inicial) \\
-Prim Podado (Estándar) & $922$ & $-63,34\%$ & $+63,5\%$ & $920$ & $0,14$ ms & Factible \\
-\textbf{Prim Podado (Desempate)} & $\mathbf{779}$ & $\mathbf{-69,03\%}$ & $\mathbf{+38,1\%}$ & $\mathbf{777}$ & $\mathbf{0,14\text{ ms}}$ & \textbf{Supera Hito 892 (5 pts)} \\
-\textit{Hito Pauta (Poda Estructural)} & \textit{892} & \textit{-64,53\%} & \textit{+58,2\%} & \textit{-} & \textit{-} & \textit{5 puntos} \\
-Heurística KMB & $[601, 891]$ & $-76,1\%$ a $-64,6\%$ & $+6,5\%$ a $+58\%$ & - & $< 1$ s & 6 - 7 puntos \\
-Búsqueda Local & $[565, 580]$ & $-77,5\%$ a $-76,9\%$ & $\le +2,8\%$ & - & $< 10$ min & \textbf{11 - 14 puntos (Meta)} \\
-\textbf{Óptimo SteinLib} & \textbf{564} & \textbf{-77,57\%} & \textbf{0,00\%} & \textbf{-} & \textbf{-} & \textbf{15 puntos (Máximo)} \\
+MST Base (Kruskal / Prim) & $2.515$ & $0,00\%$ & $+345,92\%$ & $2.499$ & $12,10$ ms & 4 puntos (Base) \\
+Kruskal Podado & $1.005$ & $-60,04\%$ & $+78,19\%$ & $1.003$ & $0,87$ ms & Factible (Poda inicial) \\
+Prim Podado (Estándar) & $922$ & $-63,34\%$ & $+63,48\%$ & $920$ & $0,42$ ms & Factible \\
+\textbf{Prim Podado (Desempate)} & $\mathbf{779}$ & $\mathbf{-69,03\%}$ & $\mathbf{+38,12\%}$ & $\mathbf{777}$ & $\mathbf{0,48\text{ ms}}$ & \textbf{Supera Hito 892 (5 pts)} \\
+Heurística Voronoi KMB & $601$ & $-76,10\%$ & $+6,56\%$ & $551$ & $45,20$ ms & 6 - 7 puntos \\
+Heurística Multi-SPH & $586$ & $-76,70\%$ & $+3,90\%$ & $545$ & $1,15$ s & 8 - 10 puntos \\
+Búsqueda Local VND & $570$ & $-77,34\%$ & $+1,06\%$ & $563$ & $10,14$ s & 11 - 14 puntos \\
+\textbf{Optimizador Completo (VND+PR+ILS)} & $\mathbf{567}$ & $\mathbf{-77,46\%}$ & $\mathbf{+0,53\%}$ & $\mathbf{536}$ & $\mathbf{40,60\text{ s}}$ & \textbf{Supera Meta $\le 580$ (14 pts)} \\
+\textit{Óptimo Global SteinLib} & \textit{564} & \textit{-77,57\%} & \textit{0,00\%} & \textit{-} & \textit{-} & \textit{15 puntos (Óptimo Teórico)} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -340,8 +401,9 @@ Búsqueda Local & $[565, 580]$ & $-77,5\%$ a $-76,9\%$ & $\le +2,8\%$ & - & $< 1
 \subsection{Análisis de Brecha (Gap)}
 El Gap respecto al óptimo global conocido ($C^* = 564$) se calcula formalmente como:
 \begin{equation}
-    \text{Gap}(\%) = \frac{C_{\text{solución}} - C^*}{C^*} \times 100\%
+    \text{Gap}(\%) = \frac{C_{\text{solución}} - C^*}{C^*} \times 100\% = \frac{567 - 564}{564} \times 100\% = +0,5319\%
 \end{equation}
+Este resultado certifica que la solución obtenida se encuentra a un $99,47\%$ de optimalidad global, logrando una reducción acumulada del $-77,46\%$ frente al árbol generador mínimo inicial ($2.515 \to 567$).
 
 % ==============================================================================
 % SECCIÓN 8: DIFICULTADES ENCONTRADAS
@@ -349,12 +411,12 @@ El Gap respecto al óptimo global conocido ($C^* = 564$) se calcula formalmente 
 \section{Dificultades Encontradas}
 \label{sec:dificultades}
 
-A lo largo del diseño, implementación y validación experimental del sistema, el equipo enfrentó los siguientes desafíos técnicos:
+A lo largo del diseño, implementación y validación experimental del sistema, el equipo enfrentó y resolvió los siguientes desafíos técnicos:
 \begin{enumerate}
     \item \textbf{Estandarización de Formatos y Saltos de Línea:} La lectura del archivo \texttt{e18.stp} requirió una limpieza estricta de caracteres de retorno de carro (\texttt{\textbackslash r\textbackslash n}) para asegurar compatibilidad entre entornos Windows, Linux y WSL sin corromper el parser.
     \item \textbf{Indexación de Nodos en Base 1 vs. Base 0:} La convención oficial de SteinLib enumera los nodos desde $1$ hasta $2.500$. Se estructuraron los vectores internos con tamaño $N + 1$ para evitar desfases de índices entre módulos.
-    \item \textbf{Verificación Formal de Aciclicidad:} Al reconectar caminos mínimos en la heurística, es común que se generen ciclos entre terminales adyacentes. Se requirió implementar un validador riguroso basado en DSU para certificar aciclicidad estricta ($|E| = |V| - 1$ y ausencia de lazos).
-    \item \textbf{Escalabilidad de Algoritmos en Instancias Grandes:} Con $62.500$ aristas, el uso de matrices de adyacencia generaría una matriz densa inviable de $2.500 \times 2.500$ ($O(V^2)$). El uso de listas de adyacencia y colas de prioridad con Fibonacci o heap binario fue imperativo para sostener tiempos inferiores a $10$ ms.
+    \item \textbf{ Degeneración de Empates y Cadenas de Grado 2 en Subgrafos Inducidos:} En la instancia \texttt{e18.stp}, más del $94\%$ de las aristas en soluciones de alta calidad tienen peso idéntico ($w = 1$). Al aplicar Kruskal convencional sobre un subconjunto de nodos candidatos, las aristas de distintos nodos Steiner se intercalaban formando cadenas de grado $2$ inmunes a la poda de hojas. Fue necesario diseñar el ordenamiento de saturación por rangos (\textit{Star-Rank MST}) de dos pasadas para concentrar la conectividad en nodos estrella de grado $\ge 3$ y forzar a los nodos superfluos a convertirse en hojas podables.
+    \item \textbf{Escalabilidad de Búsqueda Local en Instancias Densas:} Evaluar la inserción ingenua de los $2.083$ nodos Steiner en cada iteración de búsqueda local resultaba prohibitivo. La descomposición dinámica en super-componentes de peso $1$ mediante DSU y el pre-filtrado de aristas dominadas en la Fase 0 permitieron acotar los candidatos activos a $\sim 80$ nodos por iteración, reduciendo el tiempo de evaluación en más de un orden de magnitud.
 \end{enumerate}
 
 % ==============================================================================
@@ -362,7 +424,9 @@ A lo largo del diseño, implementación y validación experimental del sistema, 
 % ==============================================================================
 \section{Conclusiones}
 \label{sec:conclusiones}
-La experimentación realizada demuestra la naturaleza contrastante entre los algoritmos de árbol generador mínimo y el problema del árbol de Steiner. Mientras que el MST se resuelve de forma determinista y en tiempo polinomial ($O(|E| \log |E|)$), el STPG exige discernir activamente cuáles nodos intermedios aportan beneficio marginal frente al costo de sus aristas incidentes. La poda iterativa de hojas constituye un mecanismo de alta eficiencia temporal que descarta más del $60\%$ del costo inicial sin comprometer la factibilidad.
+La investigación e implementación desarrolladas demuestran el profundo contraste algorítmico entre el problema del Árbol Generador Mínimo (MST) y el Problema del Árbol de Steiner en Grafos (STPG). Mientras que el MST se resuelve exactamente en tiempo polinomial ($O(|E| \log |E|)$) alcanzando un costo de $2.515$ en $\sim 10$ ms, la obtención de redes Steiner cercanas al óptimo global exige combinar reducciones exactas del espacio de búsqueda, heurísticas constructivas guiadas por estructura métrica y operadores de búsqueda local capaces de identificar puntos de unión (\textit{Steiner stars}) de alto grado.
+
+La introducción del desempate orientado a terminales en el algoritmo de Prim permitió reducir el costo podado de $1.005$ (Kruskal) a $779$ en menos de $1$ ms, superando ampliamente el primer hito de evaluación ($892$). Finalmente, el pipeline completo implementado en \texttt{Optimizer} —integrando \textit{Presolve}, \textit{Dual Ascent}, Voronoi KMB ($601$), Multi-Start SPH ($586$), Descenso de Vecindad Variable con \textit{Star-Rank MST} ($570$), \textit{Path Relinking} ($568$) e ILS por componentes— alcanzó una solución factible y verificada de costo $\mathbf{567}$ ($+0,53\%$ respecto al óptimo teórico de $564$), cumpliendo de forma sobresaliente los objetivos del proyecto.
 
 % ==============================================================================
 % BIBLIOGRAFÍA
@@ -371,3 +435,4 @@ La experimentación realizada demuestra la naturaleza contrastante entre los alg
 \bibliography{references}
 
 \end{document}
+

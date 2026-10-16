@@ -130,8 +130,22 @@ Según la rúbrica de evaluación de la clase (diapositiva 313, escala de 15 pun
 | **4. Poda Estructural Óptima** | **892** | **$-64,53\%$** | $< 5$ ms | **5 puntos** | Hito oficial de pauta: elimina redundancias estructurales. |
 | **5. Solución Factible Mala Calidad** | $[601, 891]$ | $-64,6\%$ a $-76,1\%$ | - | **6 - 7 puntos** | Heurística preliminar. |
 | **6. Solución Factible Calidad Media** | $[581, 600]$ | $-76,1\%$ a $-76,9\%$ | - | **8 - 10 puntos** | Heurística constructiva intermedia. |
-| **7. Solución Factible Buena Calidad** | **$[565, 580]$** | **$-76,9\%$ a $-77,5\%$** | $< 1$ hora | **11 - 14 puntos** | **Meta establecida por el equipo ($\le 580$).** |
+| **7. Solución Factible Buena Calidad** | **$[565, 580]$** | **$-76,9\%$ a $-77,5\%$** | $< 1$ hora | **11 - 14 puntos** | **Logrado por el equipo: Costo = 567 (Gap $+0,53\%$).** |
 | **8. Solución Óptima SteinLib** | **564** | **$-77,57\%$** | - | **15 puntos** | Óptimo global teórico documentado en literatura. |
+
+### Resultados Experimentales Obtenidos (`./steiner_solver`)
+
+| Fase / Algoritmo Implementado | Costo | Reducción % (vs Base) | Gap vs Óptimo ($564$) | Aristas / Nodos Steiner | Tiempo (`-O3`) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **MST Base (Kruskal / Prim)** | $2.515$ | $0,00\%$ | $+345,92\%$ | $2.499$ / $2.083$ | $\sim 9 - 12$ ms |
+| **Kruskal Podado (Hojas)** | $1.005$ | $-60,04\%$ | $+78,19\%$ | $1.003$ / $587$ | $0,87$ ms |
+| **Prim Podado (Estándar)** | $922$ | $-63,34\%$ | $+63,48\%$ | $920$ / $504$ | $0,42$ ms |
+| **Prim Podado (Desempate Terminal)** | **$779$** | **$-69,03\%$** | **$+38,12\%$** | $777$ / $361$ | $0,48$ ms |
+| **Fase 1a: Voronoi KMB (Mehlhorn)** | $601$ | $-76,10\%$ | $+6,56\%$ | $551$ / $135$ | $45,20$ ms |
+| **Fase 1b: Multi-Start SPH ($417$ raíces)** | $586$ | $-76,70\%$ | $+3,90\%$ | $545$ / $129$ | $1,11$ s |
+| **Fase 2 y 3: VND (*Star-Rank MST* + $N_1, N_2, N_3$)** | $570$ | $-77,34\%$ | $+1,06\%$ | $563$ / $147$ | $9,00$ s |
+| **Fase 4a: *Path Relinking* sobre Pool Élite** | $568$ | $-77,42\%$ | $+0,71\%$ | $563$ / $147$ | $18,42$ s |
+| **Fase 4b: ILS (*Ruin & Recreate*) + Compactación** | **$567$** | **$-77,46\%$** | **$+0,53\%$** | **$536$ / $120$** | **$40,60$ s** |
 
 ---
 
