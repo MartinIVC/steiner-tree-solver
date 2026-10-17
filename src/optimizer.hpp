@@ -5,8 +5,10 @@
 
 // Configuración para el módulo de optimización y búsqueda local
 struct OptimizerConfig {
-    int max_iterations = 1000;
+    int max_iterations = 120;     // Iteraciones de ILS (Ruin & Recreate)
     int max_time_ms = 60000;      // 1 minuto por defecto
+    unsigned int seed = 1337;     // Semilla determinista para reproducibilidad
+    int known_optimum = 0;        // Óptimo teórico conocido (0 = usar cota inferior dual)
     bool verbose = true;
 };
 

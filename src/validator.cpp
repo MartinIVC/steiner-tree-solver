@@ -1,4 +1,5 @@
 #include "validator.hpp"
+#include "dsu.hpp"
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -41,39 +42,10 @@ bool Validator::has_cycle(const std::vector<Edge>& solution) {
         if (e.v > max_node) max_node = e.v;
     }
 
-    std::vector<int> parent(max_node + 1);
-    std::vector<int> rank(max_node + 1, 0);
-    for (int i = 0; i <= max_node; ++i) {
-        parent[i] = i;
-    }
-
-    auto find = [&](auto& self, int i) -> int {
-        if (parent[i] == i) return i;
-        return parent[i] = self(self, parent[i]);
-    };
-
+    DSU dsu(max_node);
     for (const auto& e : solution) {
-        if (e.u == e.v) {
-            // Auto-bucle (ciclo de longitud 1)
+        if (e.u == e.v || !dsu.unite(e.u, e.v)) {
             return true;
-        }
-
-        int root_u = find(find, e.u);
-        int root_v = find(find, e.v);
-
-        if (root_u == root_v) {
-            // Se encontró un ciclo: ambos nodos ya están en la misma componente conexa
-            return true;
-        }
-
-        // Unión por rango
-        if (rank[root_u] < rank[root_v]) {
-            parent[root_u] = root_v;
-        } else if (rank[root_u] > rank[root_v]) {
-            parent[root_v] = root_u;
-        } else {
-            parent[root_v] = root_u;
-            rank[root_u]++;
         }
     }
 
@@ -135,6 +107,23 @@ bool Validator::is_valid_steiner_tree(const Graph& g, const std::vector<Edge>& s
         return false;
     }
 
+    // 0. Verificar que todas las aristas pertenezcan al grafo original y tengan pesos auténticos
+    for (const auto& e : solution) {
+        if (!g.is_valid_node(e.u) || !g.is_valid_node(e.v)) {
+            if (verbose) std::cout << "[Validador] Error: Arista con nodos fuera de rango (" << e.u << ", " << e.v << ").\n";
+            return false;
+        }
+        int graph_weight = g.get_edge_weight(e.u, e.v);
+        if (graph_weight < 0) {
+            if (verbose) std::cout << "[Validador] Error: La arista (" << e.u << ", " << e.v << ") no existe en el grafo original.\n";
+            return false;
+        }
+        if (graph_weight != e.weight) {
+            if (verbose) std::cout << "[Validador] Error: Peso inválido en arista (" << e.u << ", " << e.v << "): esperado " << graph_weight << ", recibido " << e.weight << ".\n";
+            return false;
+        }
+    }
+
     // 1. Verificar cobertura de todos los terminales obligatorios
     if (!covers_all_terminals(g, solution)) {
         if (verbose) std::cout << "[Validador] Error: No todos los terminales están presentes en la solución.\n";
@@ -180,14 +169,12 @@ bool Validator::is_valid_steiner_tree(const Graph& g, const std::vector<Edge>& s
     }
 
     // 4. Comprobación explícita de aciclicidad y estructura de árbol (|E| == |V| - 1 y sin ciclos)
-    if (!is_tree(solution)) {
-        if (verbose) {
-            if (has_cycle(solution)) {
-                std::cout << "[Validador] Error: La solución contiene ciclos (no es acíclica).\n";
-            } else {
-                std::cout << "[Validador] Error: La solución no cumple la propiedad de árbol (|E| != |V| - 1).\n";
-            }
-        }
+    if ((int)solution.size() != (int)present_nodes.size() - 1) {
+        if (verbose) std::cout << "[Validador] Error: La solución no cumple la propiedad de árbol (|E| != |V| - 1).\n";
+        return false;
+    }
+    if (has_cycle(solution)) {
+        if (verbose) std::cout << "[Validador] Error: La solución contiene ciclos (no es acíclica).\n";
         return false;
     }
 

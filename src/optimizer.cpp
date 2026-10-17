@@ -65,12 +65,26 @@ public:
     // FASE 0: Presolve (Reducción del Grafo) y Ascenso Dual (Wong Dual Ascent)
     // =========================================================================
     void presolve_and_dual_ascent() {
+        int min_w = GRAPH_INF;
+        for (const auto& e : g.edge_list) {
+            if (e.weight < min_w) min_w = e.weight;
+        }
+        if (min_w <= 0 || min_w == GRAPH_INF) min_w = 1;
+        const int w2_thresh = 2 * min_w;
+
+        // Cota de cuello de botella del MST para evitar desconectar grafos con pesos arbitrarios
+        int mst_bottleneck = 0;
+        for (const auto& e : MSTSolver::compute_mst(g)) {
+            if (e.weight > mst_bottleneck) mst_bottleneck = e.weight;
+        }
+        const int max_keep_w = (mst_bottleneck > 0) ? (mst_bottleneck + min_w) : GRAPH_INF;
+
         for (int t : g.terminals) {
             for (const auto& nb : g.adj[t]) {
-                if (nb.weight == 1) {
+                if (nb.weight == min_w) {
                     term_d1[nb.to]++;
                     term_d2[nb.to] += 3;
-                } else if (nb.weight == 2) {
+                } else if (nb.weight <= w2_thresh) {
                     term_d2[nb.to] += 1;
                 }
             }
@@ -78,7 +92,7 @@ public:
         for (int u = 1; u <= N; ++u) {
             if (term_d1[u] > 0) {
                 for (const auto& nb : g.adj[u]) {
-                    if (nb.weight == 1) {
+                    if (nb.weight == min_w) {
                         term_d2[nb.to] += term_d1[u];
                     }
                 }
@@ -88,11 +102,11 @@ public:
         std::vector<std::vector<std::pair<int, int>>> w12_adj(N + 1);
         for (int i = 0; i < M; ++i) {
             const auto& e = g.edge_list[i];
-            if (e.weight == 1) {
+            if (e.weight == min_w) {
                 w1_adj[e.u].push_back(e.v);
                 w1_adj[e.v].push_back(e.u);
             }
-            if (e.weight <= 2) {
+            if (e.weight <= w2_thresh) {
                 w12_adj[e.u].push_back({e.v, e.weight});
                 w12_adj[e.v].push_back({e.u, e.weight});
             }
@@ -112,9 +126,9 @@ public:
                 if (u >= v) continue;
 
                 bool dominated = false;
-                if (w >= 4) {
+                if (w > max_keep_w) {
                     dominated = true;
-                } else if (w >= 2) {
+                } else if (w > min_w) {
                     for (const auto& [x, wx] : w12_adj[v]) {
                         if (mark[x] == u) {
                             int two_hop = mark_w[x] + wx;
@@ -1266,11 +1280,12 @@ std::vector<Edge> Optimizer::optimize(const Graph& g, const OptimizerConfig& con
     // -------------------------------------------------------------------------
     // FASE 4: Path Relinking Rápido + ILS Focalizado en Puntos Débiles
     // -------------------------------------------------------------------------
-    std::mt19937 rng(1337);
+    std::mt19937 rng(config.seed);
+    const int target_opt = (config.known_optimum > 0) ? config.known_optimum : engine.best_dual_lb;
 
     bool pr_improved = true;
     int pr_rounds = 0;
-    while (pr_improved && pr_rounds < 3 && best_sol.cost > 564) {
+    while (pr_improved && pr_rounds < 3 && best_sol.cost > target_opt) {
         pr_improved = false;
         pr_rounds++;
         size_t lim = std::min<size_t>(10, elite_pool.size());
@@ -1292,17 +1307,17 @@ std::vector<Edge> Optimizer::optimize(const Graph& g, const OptimizerConfig& con
                     best_sol = pr_sol;
                 }
                 add_to_elite(pr_sol);
-                if (best_sol.cost <= 564) break;
+                if (best_sol.cost <= target_opt) break;
             }
-            if (best_sol.cost <= 564) break;
+            if (best_sol.cost <= target_opt) break;
         }
     }
 
     std::vector<int> node_jitter(g.num_nodes + 1, 0);
-    int max_ils_iters = std::min(config.max_iterations, 120);
+    int max_ils_iters = std::max(0, config.max_iterations);
     int no_improve_iters = 0;
 
-    for (int iter = 0; iter < max_ils_iters && best_sol.cost > 564; ++iter) {
+    for (int iter = 0; iter < max_ils_iters && best_sol.cost > target_opt; ++iter) {
         auto now = Clock::now();
         double elapsed = std::chrono::duration<double, std::milli>(now - t_global_start).count();
         if (elapsed >= config.max_time_ms * 0.90 || no_improve_iters >= 40) break;
@@ -1422,11 +1437,17 @@ std::vector<Edge> Optimizer::optimize(const Graph& g, const OptimizerConfig& con
     }
 
     if (config.verbose) {
-        double gap = ((double)(best_sol.cost - 564) / 564.0) * 100.0;
         std::cout << "[Optimizer] Finalizado en " << total_ms << " ms | Costo Final: " << best_sol.cost
                   << " | Aristas: " << best_sol.edges.size()
-                  << " | Nodos Steiner: " << best_sol.steiner_count
-                  << " | Gap vs Óptimo (564): +" << gap << "%\n";
+                  << " | Nodos Steiner: " << best_sol.steiner_count;
+        if (config.known_optimum > 0) {
+            double gap = ((double)(best_sol.cost - config.known_optimum) / (double)config.known_optimum) * 100.0;
+            std::cout << " | Gap vs Óptimo (" << config.known_optimum << "): +" << gap << "%";
+        } else if (engine.best_dual_lb > 0) {
+            double gap_lb = ((double)(best_sol.cost - engine.best_dual_lb) / (double)engine.best_dual_lb) * 100.0;
+            std::cout << " | Gap vs Dual LB (" << engine.best_dual_lb << "): +" << gap_lb << "%";
+        }
+        std::cout << "\n";
     }
 
     return best_sol.edges;

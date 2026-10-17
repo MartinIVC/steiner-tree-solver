@@ -264,23 +264,33 @@ def render_svg(csv_path, svg_path, terminals, edges, nodes, total_cost, width=16
 
 
 def main():
-    terminals = load_terminals_from_stp("data/e18.stp")
-    print(f"[Plotter] Cargados {len(terminals)} nodos terminales de referencia.")
+    import argparse
 
-    os.makedirs("report/figures", exist_ok=True)
+    parser = argparse.ArgumentParser(
+        description="Generate high-resolution PNG and SVG radial tree visualizations for Steiner Tree solutions."
+    )
+    parser.add_argument("csv_files", nargs="*", help="Specific solution CSV files to plot (default: all in --input-dir)")
+    parser.add_argument("--stp", default="data/e18.stp", help="Path to reference .stp instance file (default: data/e18.stp)")
+    parser.add_argument("--input-dir", default="results", help="Directory containing solution CSV files (default: results)")
+    parser.add_argument("--output-dir", default="report/figures", help="Output directory for SVG/PNG figures (default: report/figures)")
+    args = parser.parse_args()
+
+    terminals = load_terminals_from_stp(args.stp)
+    print(f"[Plotter] Cargados {len(terminals)} nodos terminales de referencia desde {args.stp}.")
+
+    os.makedirs(args.output_dir, exist_ok=True)
 
     target_files = []
-    if len(sys.argv) > 1:
-        target_files = sys.argv[1:]
+    if args.csv_files:
+        target_files = args.csv_files
     else:
-        # Procesar todos los CSV en results/
-        if os.path.exists("results"):
-            for f in sorted(os.listdir("results")):
+        if os.path.exists(args.input_dir):
+            for f in sorted(os.listdir(args.input_dir)):
                 if f.endswith(".csv"):
-                    target_files.append(os.path.join("results", f))
+                    target_files.append(os.path.join(args.input_dir, f))
 
     if not target_files:
-        print("[Plotter] No se encontraron archivos CSV de solución en results/.")
+        print(f"[Plotter] No se encontraron archivos CSV de solución en {args.input_dir}/.")
         return 0
 
     for csv_file in target_files:
@@ -294,8 +304,8 @@ def main():
             print(f"[Plotter] Solución vacía o inválida en {csv_file}")
             continue
 
-        png_path = os.path.join("report/figures", f"{base_name}.png")
-        svg_path = os.path.join("report/figures", f"{base_name}.svg")
+        png_path = os.path.join(args.output_dir, f"{base_name}.png")
+        svg_path = os.path.join(args.output_dir, f"{base_name}.svg")
 
         print(f"[Plotter] Procesando {csv_file} (Costo: {total_cost}, Nodos: {len(nodes)}, Aristas: {len(edges)})...")
 

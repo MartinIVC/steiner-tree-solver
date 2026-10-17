@@ -71,7 +71,7 @@ public:
     void print_summary() const;
 
     // =========================================================================
-    // Funciones de utilidad para Nicolas Montecino (Optimizador y Heurísticas)
+    // Funciones de consulta, caminos mínimos y clausura métrica
     // =========================================================================
 
     // Comprueba en O(1) si un identificador de nodo pertenece al rango válido [1, num_nodes]

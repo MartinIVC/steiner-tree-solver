@@ -1,166 +1,131 @@
-# Resolución del Problema del Árbol de Steiner en Grafos (Instancia E18 - SteinLib)
+# High-Performance Steiner Tree Solver in C++17
 
-Proyecto de **Inteligencia Artificial (Evaluación 2)** para encontrar el Árbol de Steiner de peso mínimo en un grafo ponderado no dirigido.
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/17)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![Build](https://img.shields.io/badge/Build-Makefile%20%7C%20GCC%20-O3-blue)](#quick-start)
 
-* **Fecha límite de entrega:** **Viernes 16 de Octubre de 2026** (Día de la prueba).
-* **Ponderación:** 15 puntos de la Evaluación 2.
-* **Instancia oficial:** `data/e18.stp` (SteinLib - Serie E).
+A zero-dependency **C++17** heuristic and metaheuristic optimization engine for the **NP-Hard Steiner Tree Problem in Graphs (STPG)** on standard **SteinLib (`.stp`)** benchmarks.
 
----
-
-## Integrantes y División del Trabajo
-
-> [!IMPORTANT]
-> **Nota de conformación de equipos:** La pauta oficial de la clase estipula: *"Equipos de 3 o 4 integrantes"*. Se debe confirmar con el docente si el grupo puede mantenerse con 2 integrantes o si se integrará un tercer miembro.
-
-### Asignación de Módulos de Código y Secciones del Reporte
-
-El reporte escrito debe incluir obligatoriamente las **8 secciones requeridas por la pauta oficial**:
-
-| Integrante | Rol | Módulos de Código asignados | Secciones del Informe asignadas |
-| :--- | :--- | :--- | :--- |
-| **Martin Verdugo** | Cimientos, MST y Validador | `src/graph.*`<br>`src/mst.*`<br>`src/validator.*` | **1. Descripción del problema y modelación**<br>**2. Representación del grafo**<br>**3. Algoritmo base implementado (MST)**<br>**4. Estrategia de generación de solución factible (Poda)** |
-| **Nicolas Montecino** | Optimización y Heurísticas | `src/optimizer.*` | **5. Método(s) de mejora utilizado(s)**<br>**6. Resultados obtenidos y tiempos** |
-| **Ambos** | Cierre, Visualización y Análisis | `src/main.cpp`<br>`scripts/plot_tree.py` | **7. Comparación entre soluciones**<br>**8. Dificultades encontradas**<br>Revisión global y conclusiones |
+Evaluated on Beasley's classic **`e18.stp`** benchmark ($|V| = 2,500$ vertices, $|E| = 62,500$ weighted undirected edges, $|T| = 417$ mandatory terminals), the solver reduces the total tree cost from **$2,515$ (base MST)** down to a certified **$567$ ($-77.46\%$ reduction, within $+0.53\%$ of the $564$ theoretical global optimum)** without relying on external MIP/ILP solvers (such as Gurobi or CPLEX).
 
 ---
 
-## Contexto del Problema (Instancia E18)
+## Visual Progression on SteinLib `e18.stp`
 
-* **Grafo ($G$):** 2.500 nodos ($|V|$) y 62.500 aristas ($|E|$) no dirigidas con pesos enteros positivos.
-* **Nodos Terminales obligatorios ($|T|$):** 417 nodos que deben quedar obligatoriamente interconectados.
-* **Nodos de Steiner ($|S|$):** 2.083 nodos opcionales que actúan como "puentes" para reducir la longitud y costo del árbol.
-* **Meta de optimización:** Lograr un costo factible **$\le 580$** (rango 11-14 puntos en pauta; el óptimo teórico de 15 puntos es **564**).
+The solver includes an automated radial-tree visualization tool (`scripts/plot_tree.py`) that renders mandatory terminal vertices in **coral red** and optional Steiner connector vertices in **cyan**:
 
----
-
-## Arquitectura del Código y Convenciones
-
-Para garantizar una integración fluida entre los módulos, se definieron estas convenciones:
-
-1. **Indexación de Nodos:** Base 1 (del `1` al `2.500`), coincidiendo exactamente con la numeración de `data/e18.stp`.
-2. **Estructura de Aristas:**
-   ```cpp
-   struct Edge {
-       int u;          // Nodo 1 (1 a 2500)
-       int v;          // Nodo 2 (1 a 2500)
-       int weight;     // Costo de la conexión
-       bool operator<(const Edge& other) const; // Ordenamiento determinista
-   };
-   ```
-3. **Consulta de Terminales:**
-   * Para consultar en tiempo $O(1)$ si un nodo `x` es terminal: `g.is_terminal[x]` (retorna `bool`).
-   * Para iterar sobre todos los terminales: `g.terminals` (vector de `int`).
-4. **Validación Formal:** Toda solución generada debe pasar por `Validator::is_valid_steiner_tree(g, aristas_solucion)` para verificar conexidad (BFS), cobertura de los 417 terminales y aciclicidad estricta ($|E| = |V| - 1$ sin ciclos).
-5. **Utilidades en `Graph` para Heurísticas y Optimización (Nicolas):**
-   * `g.dijkstra(start, dist, parent)`: Distancias mínimas y predecesores en $O((|E| + |V|) \log |V|)$.
-   * `g.get_shortest_path_edges(start, target, parent)`: Vector de aristas del camino mínimo entre dos nodos.
-   * `g.get_steiner_nodes()`: Lista con los 2.083 nodos Steiner para exploración y búsqueda local.
-   * `g.is_steiner_node(u)` / `g.is_terminal_node(u)`: Comprobación segura en $O(1)$.
-   * `g.get_edge_weight(u, v)` / `g.has_edge(u, v)`: Consulta directa de pesos o existencia de aristas.
-   * `g.get_degree(u)` / `g.get_neighbors(u)`: Consulta segura de conectividad y adyacencia.
+| Base MST (`Cost = 2,515`) | Terminal-Prioritized Pruned Prim (`Cost = 779`) | Multi-Stage Metaheuristic (`Cost = 567`) |
+| :---: | :---: | :---: |
+| ![Base MST](report/figures/mst_base.png) | ![Pruned Prim](report/figures/mst_prim_pruned.png) | ![Optimizer Solution](report/figures/optimizer_solution.png) |
+| $2,499$ edges / $2,083$ Steiner nodes | $777$ edges / $361$ Steiner nodes ($-69.03\%$) | **$536$ edges / $120$ Steiner nodes ($-77.46\%$)** |
 
 ---
 
-## Estructura del Repositorio
+## Algorithmic Pipeline
 
-```text
-ia-steiner-tree/
-├── data/                       # Instancia oficial e18.stp (SteinLib)
-├── src/                        # Código fuente en C++
-│   ├── graph.hpp / .cpp        # Parser de .stp, estructura del grafo y clausura métrica
-│   ├── dsu.hpp                 # Estructura Disjoint Set Union (DSU) con unión por rango
-│   ├── validator.hpp / .cpp    # Validador formal (BFS, aciclicidad) y exportador CSV
-│   ├── mst.hpp / .cpp          # MST Base (Kruskal, Prim) y algoritmo de poda de hojas
-│   ├── optimizer.hpp / .cpp    # Heurística constructiva (Dijkstra) y búsqueda local
-│   └── main.cpp                # Pipeline principal y cálculo de métricas oficiales
-├── results/                    # CSVs exportados de las soluciones generadas
-├── scripts/                    # Herramientas de visualización gráfica (Python / Cairo / SVG)
-│   └── plot_tree.py            # Generador automático de figuras para el informe
-├── report/                     # Informe final académico en LaTeX
-│   ├── main.tex                # Documento principal del informe (8 secciones)
-│   ├── references.bib          # Bibliografía canónica en BibTeX
-│   └── figures/                # Gráficos generados de los árboles (PNG y SVG)
-├── Makefile                    # Compilación automatizada en Linux/WSL (-O3)
-└── README.md                   # Esta guía
+```mermaid
+flowchart LR
+    A["SteinLib .stp Parser\n(|V|=2,500, |E|=62,500)"] --> B["Phase 0: Presolve &\nMulti-Root Wong Dual Ascent\n(LB = 524, |E'| = 18,645)"]
+    B --> C["Phase 1a: Mehlhorn\nVoronoi KMB\n(Cost = 601)"]
+    C --> D["Phase 1b: Multi-Start SPH\nwith Dual Tie-Breaking\n(Cost = 586, Elite Pool)"]
+    D --> E["Phase 2 & 3: Star-Rank MST\n+ Variable Neighborhood Descent\n(N1 + N2 + N3 -> Cost = 570)"]
+    E --> F["Phase 4: Path Relinking &\nLocalized Ruin & Recreate ILS\n(Certified Cost = 567)"]
 ```
 
+### Key Techniques Implemented
+
+1. **Exact Baselines & Linear-Time Leaf Peeling (`src/mst.*`):**
+   - **Kruskal's MST** with Path-Compression / Union-by-Rank DSU (`src/dsu.hpp`) and **Prim's MST** with terminal-prioritized min-heap tie-breaking (`prefer_terminals = true`), which concentrates non-terminal vertices toward tree leaves.
+   - **$O(|V| + |E|)$ Iterative Steiner Leaf Pruning:** Degree-queue peeling of degree-1 non-terminal vertices, reducing Kruskal from $2,515 \to 1,005$ and terminal-prioritized Prim from $2,515 \to 779$ in $< 0.5\text{ ms}$.
+2. **Phase 0 — Graph Reduction & Multi-Root Wong Dual Ascent (`src/optimizer.cpp`):**
+   - Prunes 2-hop dominated edges and edges exceeding the MST bottleneck bound (shrinking `e18.stp` from $62,500$ to $18,645$ active edges).
+   - Executes multi-root directed cut **Dual Ascent** to establish a mathematical lower bound ($\text{LB} = 524$) and record edge dual-saturation frequencies used to guide subsequent heuristics.
+3. **Phase 1 — Constructive Heuristics (`src/optimizer.cpp`):**
+   - **Mehlhorn's Voronoi KMB ($O(|E| \log |V|)$):** Multi-source Dijkstra partitioning the graph into terminal Voronoi regions, followed by Kruskal over inter-region boundary edges (cost $601$ in $45\text{ ms}$).
+   - **Multi-Start Shortest Path Heuristic (Takahashi-Matsuyama SPH):** Grows trees iteratively from up to $|T| = 417$ terminal roots using dual-saturation and terminal-affinity tie-breaking, populating a diverse elite pool of size 18 (cost $586$).
+4. **Phase 2 & 3 — Canonical *Star-Rank MST* Decoder & Variable Neighborhood Descent (VND):**
+   - **Two-Pass Star-Rank MST Evaluator:** Ranks active Steiner vertices by degree-1 terminal saturation so redundant connectors are forced into degree-1 leaves and automatically pruned rather than forming degree-2 chains.
+   - **$N_1$ (k-Star Insertion & Bridge Expansion):** Inserts 1-star, 2-star, and 3-star Steiner hubs across DSU super-components.
+   - **$N_2$ (Branching Steiner Elimination & Swap):** Removes or swaps Steiner vertices of degree $\ge 3$.
+   - **$N_3$ (Exact Key-Path Replacement):** Removes key-paths and reconnects split tree components via bounded multi-source Dijkstra (reduces cost to $570$).
+5. **Phase 4 — Path Relinking & Iterated Local Search (ILS):**
+   - **Elite Pool Path Relinking:** Explores intermediate subsets of Steiner vertices along symmetric-difference trajectories between elite solutions ($570 \to 568$).
+   - **Localized *Ruin & Recreate* ILS:** Perturbs localized BFS balls around structural weak spots (degree-2 Steiner nodes and higher-weight edges), repairs the forest via randomized SPH + VND, and compacts remaining degree-2 bridges to reach **cost $567$**.
+6. **Formal Solution Validator (`src/validator.*`):**
+   - Certifies every stage against 5 strict invariants: (1) all edges exist in $G$ with authentic weights, (2) 100% terminal coverage $T \subseteq V(T_S)$, (3) single connected component via BFS, (4) tree edge count $|E(T_S)| = |V(T_S)| - 1$, and (5) acyclicity via DSU plus zero remaining Steiner leaves.
+
 ---
 
-## Compilación y Ejecución
+## Benchmark Progression (`data/e18.stp`)
 
-### 1. En Linux o Windows con WSL (Recomendado):
+*Instance parameters: $|V| = 2,500$, $|E| = 62,500$, $|T| = 417$, known global optimum $C^* = 564$. Compiled with `g++ -O3 -std=c++17`.*
+
+| Stage / Algorithm | Cost | Reduction vs. Base MST | Gap vs. Optimum ($564$) | Edges / Steiner Nodes | Execution Time |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Kruskal / Prim Base MST** | $2,515$ | $0.00\%$ | $+345.92\%$ | $2,499$ / $2,083$ | $\sim 9\text{ ms}$ |
+| **Pruned Kruskal (Leaf Peeling)** | $1,005$ | $-60.04\%$ | $+78.19\%$ | $1,003$ / $587$ | $0.87\text{ ms}$ |
+| **Pruned Prim (Standard)** | $922$ | $-63.34\%$ | $+63.48\%$ | $920$ / $504$ | $0.42\text{ ms}$ |
+| **Pruned Prim (Terminal Tie-Breaking)** | **$779$** | **$-69.03\%$** | **$+38.12\%$** | $777$ / $361$ | $0.48\text{ ms}$ |
+| **Phase 0: Wong Dual Ascent (Lower Bound)** | $524$ *(LB)* | — | $-7.09\%$ *(LB)* | $18,645$ active edges | $38.5\text{ ms}$ |
+| **Phase 1a: Mehlhorn Voronoi KMB** | $601$ | $-76.10\%$ | $+6.56\%$ | $551$ / $135$ | $45.2\text{ ms}$ |
+| **Phase 1b: Multi-Start SPH ($417$ roots)** | $586$ | $-76.70\%$ | $+3.90\%$ | $545$ / $129$ | $1.11\text{ s}$ |
+| **Phase 2 & 3: Star-Rank VND ($N_1 + N_2 + N_3$)** | $570$ | $-77.34\%$ | $+1.06\%$ | $563$ / $147$ | $9.00\text{ s}$ |
+| **Phase 4a: Elite Pool Path Relinking** | $568$ | $-77.42\%$ | $+0.71\%$ | $563$ / $147$ | $18.42\text{ s}$ |
+| **Phase 4b: Localized ILS (*Ruin & Recreate*)** | **$567$** | **$-77.46\%$** | **$+0.53\%$** | **$536$ / $120$** | **$40.60\text{ s}$** |
+
+---
+
+## Quick Start
+
+### 1. Build & Run Solver
+
 ```bash
-# Compilar todo el proyecto con máxima optimización (-O3)
+# Compile with -O3 optimizations
 make
 
-# Ejecutar el solver (por defecto: data/e18.stp)
+# Run full benchmark pipeline on SteinLib E18 (default)
 ./steiner_solver
 
-# Ejecutar con parámetros personalizados para el optimizador
-./steiner_solver data/e18.stp --iter 1500 --time-limit 45000
-
-# Limpiar binarios
-make clean
+# Run with custom ILS iterations, time budget (ms), and PRNG seed
+./steiner_solver data/e18.stp --iter 150 --time-limit 45000 --seed 1337 --optimum 564
 ```
 
-### 2. En Windows nativo (PowerShell con MinGW/GCC):
-```powershell
-g++ -O3 -Wall -std=c++17 src/*.cpp -o steiner_solver.exe
-.\steiner_solver.exe
-```
+### 2. Run Unit & Integration Tests
 
-### 3. Generar Figuras Gráficas para el Informe:
 ```bash
-# Procesa todos los CSV en results/ y genera PNG/SVG en report/figures/
-python3 scripts/plot_tree.py
+make test
+```
+
+### 3. Generate Tree Visualizations (SVG & PNG)
+
+```bash
+# Generates SVG (and high-res PNG if pycairo is installed) in report/figures/
+python3 scripts/plot_tree.py --stp data/e18.stp --input-dir results --output-dir report/figures
 ```
 
 ---
 
-## Tabla de Hitos, Resultados y Ponderación Oficial
+## Repository Structure
 
-Según la rúbrica de evaluación de la clase (diapositiva 313, escala de 15 puntos):
-
-| Método / Hito | Costo | Reducción % (vs Base) | Tiempo Estimado | Ponderación Oficial (15 pts) | Estado / Observación |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **1. Solución Parcial** | Variable | - | - | **1 - 3 puntos** | No conexo, elimina terminales o contiene ciclos. |
-| **2. MST Base (Kruskal)** | **2.515** | $0,00\%$ | $\sim 4$ ms | **4 puntos** | Factible. Conecta los 2.500 nodos del grafo. |
-| **3. MST Podado (Poda básica)** | **1.005 - 1.155** | $\sim -54\%$ a $-60\%$ | $< 1$ ms | - | Factible. Poda hojas de grado 1 no terminales. |
-| **4. Poda Estructural Óptima** | **892** | **$-64,53\%$** | $< 5$ ms | **5 puntos** | Hito oficial de pauta: elimina redundancias estructurales. |
-| **5. Solución Factible Mala Calidad** | $[601, 891]$ | $-64,6\%$ a $-76,1\%$ | - | **6 - 7 puntos** | Heurística preliminar. |
-| **6. Solución Factible Calidad Media** | $[581, 600]$ | $-76,1\%$ a $-76,9\%$ | - | **8 - 10 puntos** | Heurística constructiva intermedia. |
-| **7. Solución Factible Buena Calidad** | **$[565, 580]$** | **$-76,9\%$ a $-77,5\%$** | $< 1$ hora | **11 - 14 puntos** | **Logrado por el equipo: Costo = 567 (Gap $+0,53\%$).** |
-| **8. Solución Óptima SteinLib** | **564** | **$-77,57\%$** | - | **15 puntos** | Óptimo global teórico documentado en literatura. |
-
-### Resultados Experimentales Obtenidos (`./steiner_solver`)
-
-| Fase / Algoritmo Implementado | Costo | Reducción % (vs Base) | Gap vs Óptimo ($564$) | Aristas / Nodos Steiner | Tiempo (`-O3`) |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **MST Base (Kruskal / Prim)** | $2.515$ | $0,00\%$ | $+345,92\%$ | $2.499$ / $2.083$ | $\sim 9 - 12$ ms |
-| **Kruskal Podado (Hojas)** | $1.005$ | $-60,04\%$ | $+78,19\%$ | $1.003$ / $587$ | $0,87$ ms |
-| **Prim Podado (Estándar)** | $922$ | $-63,34\%$ | $+63,48\%$ | $920$ / $504$ | $0,42$ ms |
-| **Prim Podado (Desempate Terminal)** | **$779$** | **$-69,03\%$** | **$+38,12\%$** | $777$ / $361$ | $0,48$ ms |
-| **Fase 1a: Voronoi KMB (Mehlhorn)** | $601$ | $-76,10\%$ | $+6,56\%$ | $551$ / $135$ | $45,20$ ms |
-| **Fase 1b: Multi-Start SPH ($417$ raíces)** | $586$ | $-76,70\%$ | $+3,90\%$ | $545$ / $129$ | $1,11$ s |
-| **Fase 2 y 3: VND (*Star-Rank MST* + $N_1, N_2, N_3$)** | $570$ | $-77,34\%$ | $+1,06\%$ | $563$ / $147$ | $9,00$ s |
-| **Fase 4a: *Path Relinking* sobre Pool Élite** | $568$ | $-77,42\%$ | $+0,71\%$ | $563$ / $147$ | $18,42$ s |
-| **Fase 4b: ILS (*Ruin & Recreate*) + Compactación** | **$567$** | **$-77,46\%$** | **$+0,53\%$** | **$536$ / $120$** | **$40,60$ s** |
-
----
-
-## Flujo de Trabajo en Git
-
-Para trabajar en paralelo de forma ordenada y sin conflictos:
-1. **Crear una rama para el módulo asignado:**
-   ```bash
-   git checkout -b feature/mi-modulo
-   ```
-2. **Realizar commits con mensajes descriptivos:**
-   ```bash
-   git commit -m "Implementa KMB con Dijkstra en optimizer.cpp"
-   ```
-3. **Subir la rama y sincronizar mediante Pull Request / Merge:**
-   ```bash
-   git push origin feature/mi-modulo
-   ```
+```text
+steiner-tree-solver/
+├── data/
+│   └── e18.stp                 # SteinLib E18 benchmark instance (|V|=2500, |E|=62500, |T|=417)
+├── src/
+│   ├── dsu.hpp                 # 1-indexed Disjoint Set Union (path compression + union by rank)
+│   ├── graph.hpp / .cpp        # SteinLib .stp parser, adjacency structures, Dijkstra & metric closure
+│   ├── mst.hpp / .cpp          # Kruskal, terminal-prioritized Prim, and O(|V|+|E|) Steiner leaf pruning
+│   ├── optimizer.hpp / .cpp    # Presolve, Wong Dual Ascent, Voronoi KMB, Multi-SPH, VND, PR & ILS
+│   ├── validator.hpp / .cpp    # Formal Steiner tree verifier and CSV exporter
+│   └── main.cpp                # CLI entry point and stage-by-stage benchmark runner
+├── tests/
+│   └── test_solver.cpp         # Unit & integration test suite (DSU, Validator, MST, Optimizer)
+├── scripts/
+│   └── plot_tree.py            # Radial BFS tree layout & dark-theme SVG/PNG renderer
+├── results/                    # Exported solution edge lists (CSV)
+├── report/
+│   ├── main.tex                # Technical paper with formal proofs & complexity analysis (LaTeX)
+│   ├── references.bib          # Bibliography (Karp, Kou-Markowsky-Berman, Mehlhorn, Wong, etc.)
+│   └── figures/                # Generated SVG & PNG tree visualizations
+└── Makefile                    # Build and test automation
+```
