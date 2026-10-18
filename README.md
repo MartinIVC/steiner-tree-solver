@@ -2,7 +2,7 @@
 
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/17)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Build](https://img.shields.io/badge/Build-Makefile%20%7C%20GCC%20-O3-blue)](#quick-start)
+[![Build](https://img.shields.io/badge/Build-Makefile%20%7C%20GCC%20--O3-blue)](#quick-start)
 
 A zero-dependency **C++17** heuristic and metaheuristic optimization engine for the **NP-Hard Steiner Tree Problem in Graphs (STPG)** on standard **SteinLib (`.stp`)** benchmarks.
 
